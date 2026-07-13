@@ -1,0 +1,9 @@
+models:
+  - name: deepseek-flash
+    model: deepseek-v4-flash
+    base_url: https://api.deepseek.com/v1
+    api_key: $DEEPSEEK_API_KEY
+  - name: deepseek-pro
+    model: deepseek-v4-pro
+    base_url: https://api.deepseek.com/v1
+    api_key: $DEEPSEEK_API_KEY
