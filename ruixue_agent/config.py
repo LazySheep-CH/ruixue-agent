@@ -6,9 +6,9 @@ import os
 
 CONFIG_PATH = Path(__file__).parent.parent / 'config/config.yaml'
 
-def load_config() -> dict:
+def load_config(config_path: Path = CONFIG_PATH) -> dict:
     load_dotenv()
-    with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+    with open(config_path, 'r', encoding='utf-8') as f:
         data = yaml.safe_load(f)
     for model in data['models']:
         for k, v in model.items():
