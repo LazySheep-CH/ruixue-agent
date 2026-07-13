@@ -12,6 +12,7 @@ dependencies = [
     "pyyaml>=6.0",          # 读 config.yaml
     "python-dotenv>=1.0",   # 从 .env 读 API key
     "pytest>=8.0",          # 测试（我们要正规地写测试）
+    "langchain-deepseek>=1.0.1",
 ]
 
 [tool.pytest.ini_options]
