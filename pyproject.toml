@@ -1,0 +1,15 @@
+[project]
+name = "ruixue-agent"
+version = "0.1.0"
+description = "瑞雪智能体 —— 从零正规搭建的 LangGraph agent（配置驱动、多模型）"
+requires-python = ">=3.11"
+# 版本锁成和 deer-flow 一样，这样你在 deer-flow 学到的 API 和这里完全一致。
+dependencies = [
+    "langchain==1.2.15",
+    "langchain-core==1.3.3",
+    "langchain-openai==1.2.1",
+    "langgraph==1.1.9",
+    "pyyaml>=6.0",          # 读 config.yaml
+    "python-dotenv>=1.0",   # 从 .env 读 API key
+    "pytest>=8.0",          # 测试（我们要正规地写测试）
+]

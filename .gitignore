@@ -1,0 +1,11 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# 虚拟环境
+.venv/
+
+# 密钥：绝不提交！只提交 .env.example 模板
+.env
