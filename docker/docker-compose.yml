@@ -1,0 +1,131 @@
+# 瑞雪地膜 Agent(MVP)—— 基础设施(Infrastructure as Code)
+#
+# 这个文件是【配置=代码】,必须进 git:换台机器 git clone + docker compose up 就能复现整套环境。
+# 数据卷用【Docker 命名卷】,不落在项目目录里 —— 数据不该污染代码库。
+#
+# ⚠ 命名隔离:这台机器上有老项目 ruixue-platform / ruixue-rag / ruixue-postgres 等容器,
+#   全都用 ruixue- 前缀。我们统一用 rxmvp- 前缀 + 显式 name: ruixue-mvp,
+#   保证容器名/卷名/网络名都不和老项目撞车(踩过:container_name 撞了 → PG 起不来)。
+
+#
+# 用法(在本目录):
+#   docker compose up -d          起全套
+#   docker compose ps             看状态
+#   docker compose logs -f milvus 看日志
+#   docker compose down           停(数据保留)
+#   docker compose down -v        停 + 删数据(慎用)
+#
+# ── 为什么 Milvus 要三个容器 ──
+# Milvus 是【存储与计算分离】架构(和 Snowflake/ClickHouse 同思路,这也是它能扩到亿级的原因):
+#   etcd   元数据:有哪些 collection、字段定义、索引类型   —— "图书馆的目录卡片柜"
+#   minio  真数据:向量文件、索引文件(几个 G)             —— "书库"
+#   milvus 计算:接查询、算相似度
+# 代价:哪怕单机版也得带着这两个依赖。
+#
+# ── 职责分工(企业标准:数据是资产,索引是派生物)──
+#   PostgreSQL  【数据 = source of truth】文档元数据、块文本、父子关系
+#                 → 要可靠、可查、有事务、能备份;删文档能级联删块(外键约束)
+#   Milvus      【索引 = 可随时重建】只存 chunk_id + 向量 + 少量过滤标量
+#                 → Milvus 是内存型,千万级时用它存大文本 = 拿最贵的存储放不需要向量检索的东西
+#
+# 为什么不让 Milvus 存文本:那样它既是索引又是数据源 —— 重建索引时数据就丢了。
+# 为什么不用 JSON 文件当数据库:没事务、没并发控制、没查询能力、多机不能共享,
+#                               而且千万级 = 一千万个文件。
+#
+# 未来:Redis(等真有并发查询要缓存/分布式队列时)、MinIO 存原始PDF(多机部署时必须;
+#       现在 PDF 是冷数据、单机文件系统够 —— 这是【明确的技术债】,不是"不需要")。
+
+# compose 项目名 → 决定卷名前缀(ruixue-mvp_postgres_data)。
+# 不写的话默认取目录名 "docker" → 卷叫 docker_xxx,毫无意义且可能和别的项目撞。
+name: ruixue-mvp
+
+services:
+  postgres:
+    container_name: rxmvp-postgres
+    image: postgres:${POSTGRES_VERSION}
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      # 中文排序/比较规则
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  etcd:
+    container_name: rxmvp-etcd
+    image: quay.io/coreos/etcd:${ETCD_VERSION}
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+      - ETCD_SNAPSHOT_COUNT=50000
+    volumes:
+      - etcd_data:/etcd
+    command: etcd -advertise-client-urls=http://etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  minio:
+    container_name: rxmvp-minio
+    image: minio/minio:${MINIO_VERSION}
+    environment:
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    ports:
+      - "${MINIO_API_PORT}:9000"
+      - "${MINIO_CONSOLE_PORT}:9001"
+    volumes:
+      - minio_data:/minio_data
+    command: minio server /minio_data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  milvus:
+    container_name: rxmvp-milvus
+    image: milvusdb/milvus:${MILVUS_VERSION}
+    command: ["milvus", "run", "standalone"]
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      MINIO_REGION: us-east-1
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+    volumes:
+      - milvus_data:/var/lib/milvus
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      start_period: 90s
+      timeout: 20s
+      retries: 3
+    ports:
+      - "${MILVUS_PORT}:19530"       # 客户端连这个
+      - "${MILVUS_WEBUI_PORT}:9091"  # WebUI / 健康检查
+    depends_on:
+      - etcd
+      - minio
+
+# 命名卷:数据由 Docker 管理,不落在项目目录 → 不会污染 git
+volumes:
+  postgres_data:
+  etcd_data:
+  minio_data:
+  milvus_data:
+
+networks:
+  default:
+    name: rxmvp
