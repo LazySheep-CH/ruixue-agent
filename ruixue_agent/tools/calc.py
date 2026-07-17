@@ -17,7 +17,7 @@ from langchain_core.tools import tool
 
 # 每亩用量系数：每亩用量(kg) = 系数 × 厚度(mm)。
 COVERAGE_COEFFICIENT: dict[str, float] = {
-    "PE": 900.0,       # 普通聚乙烯地膜
+    "PE": 900.0,  # 普通聚乙烯地膜
     "生物降解": 1000.0,  # 全生物降解地膜(PBAT/PLA 等共混)
 }
 
@@ -25,7 +25,9 @@ DEFAULT_THICKNESS_MM = 0.010  # 国标最小标称厚度，经济型常用值
 
 
 @tool
-def estimate_film_usage(area_mu: float, film_type: str = "PE", thickness_mm: float = DEFAULT_THICKNESS_MM) -> str:
+def estimate_film_usage(
+    area_mu: float, film_type: str = "PE", thickness_mm: float = DEFAULT_THICKNESS_MM
+) -> str:
     """估算指定面积、类型、厚度的地膜用量(kg)。
 
     参数:
@@ -35,14 +37,14 @@ def estimate_film_usage(area_mu: float, film_type: str = "PE", thickness_mm: flo
     返回:
         一段说明用量的中文文字，含面积、类型、厚度、总用量。
     """
-    # ===== TODO(你来写函数体) =====
+    # ===== (你来写函数体) =====
     # 1. 校验 film_type 是否在 COVERAGE_COEFFICIENT 里；不在就 raise ValueError(提示可选类型)。
     #    （可顺手 film_type = film_type.upper() 之类做健壮性——不过中文 key 就不用 upper 了，你想想怎么处理大小写/别名）
     film_type = film_type.upper()
-    if (film_type not in COVERAGE_COEFFICIENT.keys()):
+    if film_type not in COVERAGE_COEFFICIENT.keys():
         raise ValueError("暂不支持该地膜用量的计算")
     # 2. 校验 area_mu 和 thickness_mm 是否为正数；不是就 raise ValueError。
-    if (area_mu <= 0.0 or thickness_mm <= 0.0):
+    if area_mu <= 0.0 or thickness_mm <= 0.0:
         raise ValueError("请输入正确的地膜面积和厚度")
     # 3. 每亩用量 = COVERAGE_COEFFICIENT[film_type] × thickness_mm
     #    总用量   = area_mu × 每亩用量

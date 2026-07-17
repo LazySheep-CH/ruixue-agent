@@ -16,4 +16,6 @@ def create_model(name: str) -> BaseChatModel:
                 api_key=model["api_key"],
             )
             return chatmodel
-    raise Exception(f"Model {name} not found, you can choose {[model['name'] for model in config["models"]]}")
+    raise Exception(
+        f"Model {name} not found, you can choose {[model['name'] for model in config['models']]}"
+    )
