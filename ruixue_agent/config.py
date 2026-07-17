@@ -4,18 +4,19 @@ from dotenv import load_dotenv
 import os
 
 
-CONFIG_PATH = Path(__file__).parent.parent / 'config/config.yaml'
+CONFIG_PATH = Path(__file__).parent.parent / "config/config.yaml"
+
 
 def load_config(config_path: Path = CONFIG_PATH) -> dict:
     load_dotenv()
-    with open(config_path, 'r', encoding='utf-8') as f:
+    with open(config_path, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
-    for model in data['models']:
+    for model in data["models"]:
         for k, v in model.items():
             if isinstance(v, str) and v.startswith("$"):
                 model[k] = os.environ[v[1:]]
     return data
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     print(load_config())

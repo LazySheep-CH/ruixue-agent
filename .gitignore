@@ -8,5 +8,17 @@ __pycache__/
 # 虚拟环境
 .venv/
 
-# 密钥：绝不提交！只提交 .env.example 模板
+# 密钥:绝不提交!只提交 .env.example 模板
 .env
+
+# ── 数据不进 git ──
+# git 是给【代码】用的:它假设文件小、改动是行级的、历史要永久保留。
+# 4.2G 的解析产物全都不满足 —— 而且 git 历史【删不掉】,提交一次就永远背着。
+# 判断标准就一句:能不能用代码重新生成?
+#   能 → 是产物,不进 git(data/ 全部能:MinerU 输出重跑管道就有)
+#   不能 → 是资产,得有别的地方存(原始 PDF → 以后进 MinIO)
+data/
+mineru-out/
+
+# 模型权重(几个 G,由 sentence-transformers 自己缓存)
+models/
