@@ -32,13 +32,25 @@ def main() -> None:
     args = ap.parse_args()
 
     engine = get_engine()
-    where = "TRUE" if args.redo else "text_tokens IS NULL"
+
+    # --redo:先把 text_tokens 全清空,再走"NULL 才处理"的正常路径。
+    #
+    # ⚠ 不能用 "WHERE TRUE + LIMIT 分页" 来重算 —— 踩过的 bug:
+    #   分页没有 OFFSET,每批都从头查符合条件的块;第一批更新后那些块仍满足
+    #   WHERE TRUE,下一批又查到它们 → 有的块被重复处理、有的从没被碰。
+    #   现象:处理数超过总数(265,000/262,782)。
+    #   正确做法是让"已处理"这件事改变 WHERE 的判定 —— 清空后用 text_tokens IS NULL,
+    #   处理一个就少一个,天然收敛、不重不漏。
+    if args.redo:
+        with engine.begin() as conn:
+            conn.execute(text("UPDATE chunks SET text_tokens = NULL"))
+        print("--redo:已清空 text_tokens,全部重算")
 
     with engine.connect() as conn:
-        todo = conn.execute(text(f"SELECT count(*) FROM chunks WHERE {where}")).scalar()
-    print(
-        f"待分词 {todo:,} 块" + ("(--redo:全部重算)" if args.redo else "(跳过已有的)")
-    )
+        todo = conn.execute(
+            text("SELECT count(*) FROM chunks WHERE text_tokens IS NULL")
+        ).scalar()
+    print(f"待分词 {todo:,} 块")
     if not todo:
         print("没有要做的。")
         return
@@ -47,10 +59,11 @@ def main() -> None:
     done = 0
     while True:
         with engine.begin() as conn:
+            # text_tokens IS NULL:处理一个就少一个,天然收敛(不用 OFFSET,不重不漏)
             rows = conn.execute(
-                text(f"""
+                text("""
                 SELECT chunk_id, text FROM chunks
-                WHERE {where}
+                WHERE text_tokens IS NULL
                 ORDER BY chunk_id LIMIT :lim
             """),
                 {"lim": _BATCH},
@@ -71,8 +84,6 @@ def main() -> None:
         print(
             f"  {done:>7,}/{todo:,}  {rate:>6.0f} 块/秒  剩约 {(todo - done) / rate / 60:>4.1f} 分钟"
         )
-        if args.redo and done >= todo:
-            break  # --redo 时 where 恒真,靠计数收尾
 
     print(f"\n完成 {done:,} 块,耗时 {time.time() - t0:.0f}s")
 
