@@ -22,3 +22,4 @@ mineru-out/
 
 # 模型权重(几个 G,由 sentence-transformers 自己缓存)
 models/
+config/config.yaml

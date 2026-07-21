@@ -25,7 +25,28 @@ dependencies = [
     "psycopg[binary]>=3.3.4",
     "sqlalchemy>=2.0",
     "alembic>=1.13",
+    "torch>=2.6",           # 显式声明:否则被 sentence-transformers 顺带装成 CPU 版
+    "jieba>=0.42.1",
 ]
+
+# ── 让 torch 用上 GPU ────────────────────────────────────────────────
+# 踩过的坑:PyPI 上 Windows 的默认 torch wheel 是【CPU-only 构建】(版本号带 +cpu)。
+# sentence-transformers 顺带把它拉进来 → 机器上插着 RTX 3090,torch 却连卡都看不见,
+# torch.cuda.is_available() 一直是 False。它不报错,只是默默用 CPU 慢慢磨。
+#
+# CUDA 版的 wheel 只在 PyTorch 自己的源上,得显式指过去。
+#
+# 为什么是 cu126:3090 是 Ampere 架构,cu126 支持得最稳。驱动 595.95 支持到 CUDA 13.2,
+# 而 CUDA 驱动向后兼容 —— 新驱动能跑老 CUDA 编译的程序,所以不用追最新。
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+# explicit = true 很关键:只有下面 tool.uv.sources 里点名的包才从这个源拿,
+# 其余依赖照旧走 PyPI。不加的话 uv 会拿它当通用源找所有包,解析会乱。
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu126" }
 
 # 让本项目自己成为一个【可安装的包】。
 # 之前没有这段 → ruixue_agent 不在 venv 里 → 每个 script 都得写
