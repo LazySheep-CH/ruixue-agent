@@ -210,17 +210,31 @@ def test_save_empty_chunks_is_noop(repo, session):
 
 
 def test_tsv_is_populated_by_trigger(repo, session):
-    """text_tsv 由数据库触发器自动算 —— repository 不许自己填这一列。
+    """text_tsv 由数据库触发器从 text_tokens 生成 —— repository 不许自己填 tsv。
 
-    验证的是"分工对不对":全文检索向量是数据库的活,不是 Python 的活。
+    ⚠ 分工在 migration 0002 变了:
+        0001: 触发器读 text      —— 但 simple 配置不切中文,整句一个 token,索引是废的
+        0002: 触发器读 text_tokens —— Python 侧 jieba 分好词写进来,PG 只负责转 tsvector
+      分词是 Python 的活(能加领域词典、能测),转 tsvector 是数据库的活。
+
+    所以 repository 存的 chunk 如果没有 text_tokens,tsv 就是空的 —— 这是对的:
+    分词由 scripts/backfill_tokens.py 统一做,不该混进写库路径。
     """
+    from sqlalchemy import text as sa_text
+
     repo.save_document(_doc())
     repo.save_chunks(_chunks())
     session.flush()
+
+    # 模拟分词管道写入 tokens(真实路径是 backfill_tokens.py)
+    session.execute(
+        sa_text("UPDATE chunks SET text_tokens = :tok WHERE chunk_id = :cid"),
+        {"tok": "pbat 牌号 th801t 蓝山 屯河", "cid": "aaaa000000000001_s0_c0"},
+    )
     row = session.get(ChunkRow, "aaaa000000000001_s0_c0")
     session.refresh(row)
     assert row.text_tsv is not None
-    assert "th801t" in row.text_tsv.lower()  # 英文牌号被切出来了
+    assert "th801t" in row.text_tsv.lower()  # 触发器把 tokens 转成了 tsvector
 
 
 # ────────────────────── 5. 检索侧要用的读接口 ──────────────────────
