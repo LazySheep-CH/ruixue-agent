@@ -98,6 +98,36 @@ class DocumentRow(Base):
     )
 
 
+class TermDfRow(Base):
+    """词 → 文档频率(出现在多少个父块里)。BM25 挑词用。
+
+    为什么要单独一张表:
+        词法检索的成败取决于【只用罕见词查】。实测:
+          全部词 OR      R@10 0.350   8497 ms
+          只留 DF<1% 的  R@10 0.525    140 ms   ← 召回 +50%,快 60 倍
+        因为一个罕见词和七个常见词做 OR,常见词会把候选灌到几万,
+        罕见词的定位能力被淹没。
+
+        要挑罕见词就得知道每个词的文档频率。PG 的 ts_stat 能算,
+        但它是【全表扫】—— 不能每次查询都跑。所以物化成一张表。
+
+    这是【派生数据】(可以从 chunks 重新算出来),和索引一个性质:
+    丢了不要紧,重跑 scripts/build_term_df.py 就有。
+    """
+
+    __tablename__ = "term_df"
+
+    term: Mapped[str] = mapped_column(Text, primary_key=True)
+    ndoc: Mapped[int] = mapped_column(
+        Integer, nullable=False, comment="这个词出现在多少个父块里"
+    )
+
+    __table_args__ = (
+        Index("idx_term_df_ndoc", "ndoc"),
+        {"comment": "词频表(派生数据,可重建)。BM25 靠它挑出罕见词,只用罕见词查"},
+    )
+
+
 class ChunkRow(Base):
     """一个检索单元。父块和子块【同一张表】—— 它们是同一种东西,只差 parent_id 空不空。"""
 
@@ -130,13 +160,29 @@ class ChunkRow(Base):
     page_end: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     element_type: Mapped[str | None] = mapped_column(String(16))
 
-    # 全文检索向量 —— 为 BM25 混合检索铺路。
+    # jieba 分词后的词串(空格分隔)—— BM25 的输入。
+    #
+    # 为什么要单独存一列,不在触发器里现算:
+    #   触发器跑在 PostgreSQL 进程里,调不到 Python 的 jieba。
+    #   所以反过来:Python 侧分好词写进这一列,PG 侧的触发器只负责
+    #   把它转成 tsvector。分词逻辑留在 Python 里的好处是能测、能改、能加词典。
+    text_tokens: Mapped[str | None] = mapped_column(
+        Text,
+        comment="jieba 分词后的词串(空格分隔),由 Python 侧写入;text_tsv 由触发器从它生成",
+    )
+
+    # 全文检索向量 —— BM25 的索引。
     # 实测过纯向量检索的缺陷:问 "PBAT用什么牌号" 会命中 PLA 那条(0.502 vs 0.477),
-    # 因为 embedding 不保证关键词精确匹配。PG 的 tsvector 能补上这一半。
-    # 由 migration 里的触发器自动维护(插入/更新时自动算)。
+    # 因为 embedding 不保证关键词精确匹配。
+    #
+    # 0002 之前它是从 text 直接生成的 —— 那是【废的】:
+    #   simple 配置靠空格切词,中文没空格 → 整句一个 token。
+    #   实测搜「地膜厚度」「厚度」「PBAT」「0.010」全部 false,
+    #   连夹在中文里的英文数字都搜不到(和中文粘在一起了)。
+    # 0002 起改成从 text_tokens 生成。
     text_tsv: Mapped[str | None] = mapped_column(
         TSVECTOR,
-        comment="全文检索向量,触发器自动维护。当前用 simple 配置(未做中文分词,技术债)",
+        comment="全文检索向量,触发器从 text_tokens 生成(不是从 text —— simple 配置不分中文词)",
     )
 
     created_at: Mapped[datetime] = mapped_column(
