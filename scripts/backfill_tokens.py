@@ -35,7 +35,7 @@ def main() -> None:
 
     # --redo:先把 text_tokens 全清空,再走"NULL 才处理"的正常路径。
     #
-    # ⚠ 不能用 "WHERE TRUE + LIMIT 分页" 来重算 —— 踩过的 bug:
+    # 不能用 "WHERE TRUE + LIMIT 分页" 重算,已知陷阱:
     #   分页没有 OFFSET,每批都从头查符合条件的块;第一批更新后那些块仍满足
     #   WHERE TRUE,下一批又查到它们 → 有的块被重复处理、有的从没被碰。
     #   现象:处理数超过总数(265,000/262,782)。

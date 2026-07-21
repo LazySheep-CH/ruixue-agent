@@ -41,7 +41,7 @@ def is_done(out_dir: Path, did: str) -> bool:
     """已完成 = 该文档目录下【任意】子目录里有 content_list.json。
 
     注意:MinerU 的输出子目录名 = 它实际用的方法(auto/ 或 txt/ 或 ocr/)。
-    写死 'auto' 会把 -m txt 跑出来的误判成"没跑"——这是之前踩过的坑。
+    不能写死 'auto':-m txt 模式的输出目录名不同,会被误判为未解析。
     """
     return any((out_dir / did).glob("*/*_content_list.json"))
 
@@ -82,7 +82,7 @@ def main() -> None:
         for p in pdfs:
             did = id_map.get(p.name)
             if not did:
-                print(f"  ⚠ manifest 里找不到 {p.name[:40]},跳过")
+                print(f"  注意:manifest 里找不到 {p.name[:40]},跳过")
                 continue
             if not is_done(out, did):  # 断点续跑:已有产出就跳过
                 pending.append((cat, p, did))
@@ -136,7 +136,7 @@ def main() -> None:
                 timeout=60 * 60,  # 一批最多 1 小时;卡死的不能拖死整个批处理
             )
         except subprocess.TimeoutExpired:
-            print("  ⚠ 该批超时(1小时),跳过继续 —— 未产出的会在下次重跑时重试")
+            print("  注意:该批超时(1小时),跳过继续 —— 未产出的会在下次重跑时重试")
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 

@@ -1,7 +1,7 @@
-"""第6层 quality:入库前的质量门禁。不给每篇 Document 体检打分,不合格的许入库。
+"""质量门禁:入库前给每篇 Document 打分,不合格的不许入库。
 
-理念和 schema 里的 @field_validator 一样——把关,只是从"类型边界"放大到"整篇文档边界"。
-不合格文档 → data/failed/ 人工复核,而不是悄悄污染知识库(垃圾进垃圾出)。
+与 schema 的 @field_validator 同一思路,把关粒度从字段放大到整篇文档。
+不合格文档进入 data/failed/ 供人工复核,而不是静默混入知识库。
 """
 
 from __future__ import annotations

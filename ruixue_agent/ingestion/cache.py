@@ -1,20 +1,16 @@
-"""管道的【中间产物缓存】:把 Document / Chunk 存成 JSON,下次直接读,不用重跑贵的步骤。
+"""管道中间产物的 JSON 缓存,避免重复执行昂贵的解析步骤。
 
-⚠ 和 ruixue_agent/persistence/ 的区别(别搞混,所以从 persistence.py 改名成了 cache.py):
-    cache.py(这里)  ingestion 内部的临时落盘。可以随时删,删了重跑管道就有。
-                      属于 ingestion,因为只有解析管道用它。
-    persistence/      数据库(PostgreSQL)。是 source of truth,删了就没了。
-                      独立模块,因为 ingestion(写)和 rag(读)【共用】。
+与 ruixue_agent/persistence/ 的职责区分(改名自 persistence.py,避免混淆):
+    cache.py      ingestion 内部的临时落盘,可随时删除、重跑管道即可再生;
+    persistence/  PostgreSQL,数据的 source of truth,ingestion 与 rag 共用。
 
+目录布局:
+  data/parsed/<document_id>.json   Document(parse+clean 结果)
+  data/chunks/<document_id>.json   Chunk 列表(chunk 结果)
+  data/failed/<document_id>.json   质量门禁未通过的文档(留档,不静默丢弃)
 
-分层缓存:
-  data/parsed/<document_id>.json   Document(parse+clean 的结果)
-  data/chunks/<document_id>.json   Chunk 列表(chunk 的结果)
-  data/failed/<document_id>.json   质量门禁毙掉的(留账,不悄悄丢)
-
-靠 schema.py 选 Pydantic 时就备好的两把刀:
-  doc.model_dump_json()            对象 → JSON 字符串
-  Document.model_validate_json(s)  JSON 字符串 → 对象(嵌套 Element 自动重建+校验)
+序列化直接用 Pydantic:model_dump_json 落盘,model_validate_json 读回,
+嵌套的 Element 自动重建并再次校验。
 """
 
 from __future__ import annotations
@@ -30,15 +26,7 @@ FAILED = _DATA / "failed"
 
 
 def save_document(doc: Document, folder: Path = PARSED) -> Path:
-    """把一个 Document 存成 data/parsed/<document_id>.json,返回文件路径。
-
-    轮到你写(三步):
-      1. folder.mkdir(parents=True, exist_ok=True)      确保目录在
-      2. path = folder / f"{doc.document_id}.json"       文件名 = 它的 id
-      3. path.write_text(doc.model_dump_json(), encoding="utf-8")
-         return path
-    """
-    # 你写
+    """Document 存为 <folder>/<document_id>.json,返回文件路径。"""
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"{doc.document_id}.json"
     path.write_text(doc.model_dump_json(), encoding="utf-8")
@@ -46,25 +34,15 @@ def save_document(doc: Document, folder: Path = PARSED) -> Path:
 
 
 def load_document(document_id: str, folder: Path = PARSED) -> Document | None:
-    """读回一个 Document;不存在返回 None(让调用方决定要不要重新解析)。
-
-    轮到你写(三步):
-      1. path = folder / f"{document_id}.json"
-      2. 如果 not path.exists(): return None
-      3. return Document.model_validate_json(path.read_text(encoding="utf-8"))
-    """
-    # 你写
+    """读回 Document;不存在返回 None,由调用方决定是否重新解析。"""
     path = folder / f"{document_id}.json"
     if not path.exists():
         return None
     return Document.model_validate_json(path.read_text(encoding="utf-8"))
 
 
-# ── 下面两个我写(和上面同构,只是 Chunk 是个列表,要多一层包装)──
-
-
 def save_chunks(document_id: str, chunks: list[Chunk], folder: Path = CHUNKS) -> Path:
-    """一篇文档的所有 Chunk 存成一个 JSON 数组。"""
+    """一篇文档的全部 Chunk 存为一个 JSON 数组。"""
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"{document_id}.json"
     body = "[" + ",".join(c.model_dump_json() for c in chunks) + "]"
@@ -73,7 +51,7 @@ def save_chunks(document_id: str, chunks: list[Chunk], folder: Path = CHUNKS) ->
 
 
 def load_chunks(document_id: str, folder: Path = CHUNKS) -> list[Chunk] | None:
-    """读回一篇文档的所有 Chunk;不存在返回 None。"""
+    """读回一篇文档的全部 Chunk;不存在返回 None。"""
     import json
 
     path = folder / f"{document_id}.json"
@@ -85,5 +63,5 @@ def load_chunks(document_id: str, folder: Path = CHUNKS) -> list[Chunk] | None:
 
 
 def is_parsed(document_id: str) -> bool:
-    """这篇解析过了吗 —— 断点续跑靠它跳过已完成的。"""
+    """该文档是否已解析,批处理断点续跑时用于跳过。"""
     return (PARSED / f"{document_id}.json").exists()

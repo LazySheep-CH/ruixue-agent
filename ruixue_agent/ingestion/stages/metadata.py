@@ -4,8 +4,8 @@
     title      第一个 level-1 heading
     year       卷首四位年份取最大(通常是出版年)
     doi        正则
-    keywords   ★ 作者亲手写的"关键词" —— 比拿词典猜主题准得多(实测覆盖 74.4%)
-    abstract   ★ 文档自述的摘要(实测覆盖 79.7%)
+    keywords   作者声明的"关键词"(实测覆盖 74.4%)
+    abstract   文档自述的摘要(实测覆盖 79.7%)
 
 为什么砍掉 materials/crops 词典:
   ① 硬编码 brittle:新材料/别名抓不到,词典永远补不完

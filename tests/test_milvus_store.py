@@ -1,6 +1,6 @@
 """MilvusVectorStore 的规格说明书。
 
-⚠ 和 numpy 版 VectorStore 的接口【不一样】,这是刻意的:
+注意:和 numpy 版 VectorStore 的接口【不一样】,这是刻意的:
     numpy 版手里握着全部东西(children/parents/vectors),所以 search() 能直接还你 Chunk。
     Milvus 版【只有向量】,文本在 PG 里 —— 它根本没有 Chunk 可还。
     存储拆开了,接口就得跟着变。
@@ -39,7 +39,7 @@ def store():
 
 
 def _rows():
-    """三条子块。文本要真实 —— 玩具数据会给假信心(踩过 3 次)。"""
+    """三条子块,文本取自真实语料 —— 构造数据难以覆盖真实分布。"""
     return [
         {
             "chunk_id": "d1_s0_c0",
@@ -93,7 +93,7 @@ def test_index_and_count(store):
 
 
 def test_index_is_idempotent(store):
-    """★ 22 万条灌到一半挂了必须能直接重跑。
+    """22 万条灌到一半挂了必须能直接重跑。
 
     Milvus【没有事务】—— 挂了不会回滚,会留下半截数据。
     所以幂等在这里比在 PG 里更要命:它是唯一的恢复手段。
@@ -131,7 +131,7 @@ def test_search_finds_semantically_closest(store):
 
 
 def test_search_returns_ids_not_chunks(store):
-    """★ 契约:只还 (chunk_id, 相似度)。
+    """契约:只还 (chunk_id, 相似度)。
 
     Milvus 里【没有文本】—— 文本是 PG 的活。
     这个测试锁住职责边界:哪天有人想往 Milvus 塞 text 字段,这里就该红。
@@ -142,7 +142,7 @@ def test_search_returns_ids_not_chunks(store):
 
 
 def test_search_prefilters_by_year(store):
-    """★ 前过滤:在 2020 年后的子集里搜,不是搜完再筛。
+    """前过滤:在 2020 年后的子集里搜,不是搜完再筛。
 
     区别看这里:PBAT 那条(2025)语义上最像"牌号",PLA 那条(2018)次之。
     过滤 year>=2020 后,PLA 那条【根本不该出现】。

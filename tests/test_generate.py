@@ -39,7 +39,7 @@ def _gen(hits, capture=None):
 
 
 def test_no_hits_says_so_without_calling_llm():
-    """★ 没检索到材料:直接如实说,不调 LLM。
+    """没检索到材料:直接如实说,不调 LLM。
 
     最危险的情况是让 LLM 在空上下文里凭记忆答 —— 那就是纯幻觉。
     """
@@ -59,7 +59,7 @@ def test_context_is_numbered_for_citation():
 
 
 def test_grounding_instructions_in_prompt():
-    """★ grounding 的规则必须进 prompt —— 这是 RAG 的命根子。"""
+    """grounding 的规则必须进 prompt —— 这是 RAG 的命根子。"""
     captured = []
     g = _gen([_hit("a", "PBAT牌号TH801T")], capture=captured)
     g.answer("PBAT牌号")

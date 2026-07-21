@@ -1,8 +1,7 @@
 """指标本身也要测 —— 指标错了,后面所有结论都是错的。
 
-(踩过:早期用"只统计 type=='text' 的字数"当质量指标,
- 把 5 篇实测试验报告判成"0字垃圾" —— 它们的内容全在表格里。
- 指标是尺子,尺子歪了,量什么都白量。)
+(例:仅统计 type=='text' 字数的质量指标,会把内容全在表格里的
+ 实测报告误判为空文档 —— 指标本身的缺陷会污染所有下游结论。)
 """
 
 from ruixue_agent.rag.metrics import evaluate, recall_at_k, reciprocal_rank
@@ -15,10 +14,10 @@ def test_recall_hit_and_miss():
 
 
 def test_recall_any_gold_counts(rows=None):
-    """★ 多标准答案:命中【任意一个】就算数。
+    """多标准答案:命中【任意一个】就算数。
 
     这正是 pooling 要修的那个 bug:早期每题只标一个 gold,
-    检索器返回了库里另一段同样能答的 → 被判 0 分 → 冤枉。
+    检索器返回了库里另一段同样能回答的块,却被判 0 分。
     """
     assert recall_at_k(["x", "b"], {"a", "b"}, k=2) == 1.0  # 命中 b
     assert recall_at_k(["a", "x"], {"a", "b"}, k=2) == 1.0  # 命中 a,一样算

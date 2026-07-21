@@ -77,22 +77,11 @@ class Document(BaseModel):
     sha256: str  # 文件内容哈希;文件级去重(字节完全相同 = 同一文件)
     source: str  # 来源:期刊论文 / 标准规范 / 爬虫;元数据过滤 + 权威性排序
     parser: str  # 谁解析的:mineru / text;数据血缘,换解析器后可追溯
-    elements: list[Element] = Field(default_factory=list)  # ★ 结构单元列表,下游唯一入口
+    elements: list[Element] = Field(default_factory=list)  # 结构单元列表,下游唯一入口
     meta: dict = Field(
         default_factory=dict
     )  # 文档级元数据:标题/作者/年份/DOI(后面 metadata 层填)
 
 
-# ── 你要能讲的四个八股 ──────────────────────────────────────────────
-# ① Parse, don't validate:让非法数据在入口(构造 Element/Document 时)就无法存在,
-#    而不是一路带到下游才炸。@field_validator 就是把"质量门禁"焊在类型边界上。
-# ② 落盘/读回怎么做?
-#    写:doc.model_dump_json() → 存 data/parsed/doc_0001.json
-#    读:Document.model_validate_json(文本) → 嵌套的 Element 自动重建 + 再次校验
-#    dataclass 做不到这点(asdict 是单向的,读回要手写 Element(**e))——这是选 Pydantic 的关键。
-# ③ 为什么可变默认值用 Field(default_factory=dict)?
-#    dataclass 里 = {} 会让所有实例共享同一个 dict(可变默认值陷阱)。
-#    Pydantic 其实会自动深拷贝默认值、不踩这个坑,但用 default_factory 更显式、更地道。
-# ④ 为什么只存 level、不存 section_path(章节路径)?
-#    section_path 是"派生数据",可由 level 序列在 chunk 阶段算出。
-#    IR 里只放"原始信号",派生结构下游算——避免重复存储、避免不一致。
+# 设计说明:IR 只存原始信号(如 heading 的 level),派生结构(章节路径)由
+# 下游按需计算,避免重复存储与不一致。可变默认值一律 Field(default_factory=...)。

@@ -2,16 +2,15 @@
 
 表结构的【第一个版本】。以后每次改结构 = 新增一个 migration 文件,
 串成 0001 → 0002 → … 的链条;数据库里的 alembic_version 表记着当前在哪一版。
-这正是手写 CREATE TABLE IF NOT EXISTS 做不到的:那玩意儿遇到已存在的表直接跳过,
-什么也不做 —— 想加个字段?它假装成功,你的库和别人的库悄悄不一样了。
+手写 CREATE TABLE IF NOT EXISTS 做不到这一点:遇到已存在的表直接跳过,
+后续加列的变更被静默忽略,各环境的库结构会逐渐不一致。
 
-autogenerate 生成后【手工补】的两样(它生不出来 —— 模板那句 "please adjust!" 不是客套):
-  ① postgresql 的 import:它用了 postgresql.TSVECTOR() 却没生成对应 import,是它的老毛病
-  ② 触发器:Alembic 只 diff【表结构】,数据库里的函数/触发器它不管
+autogenerate 之后需手工补两处:
+  ① sqlalchemy.dialects.postgresql 的 import(生成代码引用了 TSVECTOR 却缺 import)
+  ② 触发器:Alembic 只比对表结构,不管理数据库函数与触发器
 
-注释(COMMENT ON)不在这里手写 —— 写在 models.py 的 comment= 上让 autogenerate 生成。
-写在这里会造成模型和库【漂移】:模型没声明注释 → alembic check 判定该把注释删掉。
-(踩过,正是 alembic check 抓出来的 —— 这就是为什么 CI 里要跑这条命令)
+COMMENT ON 一律写在 models.py 的 comment= 上由 autogenerate 生成,不在此手写:
+模型未声明的注释会被 alembic check 判定为漂移并要求删除。
 
 Revision ID: 0001
 Revises:
@@ -151,16 +150,16 @@ def upgrade() -> None:
     )
     # ### end Alembic commands ###
 
-    # ══════════ 以下为手工补充(Alembic 不管触发器)══════════
+    # ── 以下为手工补充(Alembic 不管理触发器)──
 
     # ① updated_at 自动更新触发器
     #
     # 为什么必须在【数据库】做,而不是在 Python 里写 doc.updated_at = now():
     #   写库的路径有很多条(管道、修数据的脚本、DBA 手工 UPDATE、以后的 Web 后台)。
-    #   靠每条路径自觉赋值 = 迟早有人忘,而且忘了【不报错】,数据只是悄悄不对。
+    #   靠每条路径自觉赋值迟早有遗漏,且遗漏不报错,数据只是静默出错。
     #   触发器在数据库层,任何路径的 UPDATE 都躲不掉。
     #   和 CHECK 约束、和 schema.py 的 @field_validator 是同一个思想:
-    #   把不变量放在【数据最后必经的那一层】,而不是指望调用方守规矩。
+    #   把不变量放在数据最后必经的一层,而不是依赖调用方自觉。
     op.execute(
         """
         CREATE OR REPLACE FUNCTION set_updated_at() RETURNS trigger AS $$
@@ -189,7 +188,7 @@ def upgrade() -> None:
     #   正解是装 zhparser / pg_jieba 扩展(要改 Docker 镜像,重建索引)。
     #   先用 simple 打地基:英文术语(PBAT/PLA/ASTM)和数字型号已经能精确匹配,
     #   而那恰好是纯向量检索最容易搞错的地方(实测:问 PBAT 命中了 PLA,0.502 vs 0.477)。
-    #   中文分词是【明确的技术债】,等做 BM25 评测拿到数据再补 —— 别凭感觉提前优化。
+    #   中文分词记为已知技术债,待 BM25 评测数据支撑后再补(见 0002)。
     op.execute(
         """
         CREATE OR REPLACE FUNCTION chunks_set_tsv() RETURNS trigger AS $$
