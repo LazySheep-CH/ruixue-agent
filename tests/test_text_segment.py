@@ -22,7 +22,7 @@ def test_domain_terms_stay_whole():
 
 
 def test_standard_code_stays_whole():
-    """★ 标准号必须整体保留 —— "这膜符合 GB/T 35795 吗"是最高频查询之一。
+    """标准号必须整体保留 —— "这膜符合 GB/T 35795 吗"是最高频查询之一。
 
     jieba 默认会把 "DB37/T2446-2013" 切成 DB37 / / / T2446 / - / 2013,彻底废掉。
     """
@@ -54,7 +54,7 @@ def test_english_and_numbers_survive():
 
 
 def test_superscript_normalized_to_plain():
-    """★ Unicode 上标/下标归一化成 plain —— BM25 层的对齐要求。
+    """Unicode 上标/下标归一化成 plain —— BM25 层的对齐要求。
 
     实测:g·kg-1 切成 "kg 1",g·kg⁻¹ 切成 "kg ¹" —— 完全不同,互相搜不到。
     语料里两种混着存(plain 4893 块 + unicode 5528 块),用户键盘只打得出 plain,

@@ -41,7 +41,7 @@ class DocumentRow(Base):
 
     comment= 会变成数据库里的 COMMENT ON —— 新人 `\\d+ documents` 就能看懂每个字段,
     不用翻代码问人。注释必须写在【模型】上而不是 migration 里手写 COMMENT ON:
-    模型是唯一事实来源,写别处 `alembic check` 会判定漂移(踩过)。
+    模型是唯一事实来源,写在别处会被 alembic check 判定为漂移。
     """
 
     __tablename__ = "documents"
@@ -82,8 +82,8 @@ class DocumentRow(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    # 自动更新靠 migration 里的【触发器】,不是靠这里。
-    # (踩过:光加字段没触发器 → updated_at 永远等于插入时间,是个摆设)
+    # 自动更新由 migration 中的触发器完成。仅有字段而无触发器时,
+    # updated_at 恒等于插入时间,形同虚设。
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

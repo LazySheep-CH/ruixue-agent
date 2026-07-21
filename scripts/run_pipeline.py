@@ -130,7 +130,7 @@ def main() -> None:
         )
 
     if UNKNOWN_TYPES:
-        print("\n⚠ 遇到未知元素类型(已丢弃,但记了账 —— 别让新类型被静默吞掉)")
+        print("\n注意:遇到未知元素类型(已丢弃,但记了账 —— 别让新类型被静默吞掉)")
         for k, v in UNKNOWN_TYPES.most_common():
             print(f"  {k:12}: {v}")
 

@@ -115,7 +115,9 @@ def main() -> None:
     for w in weights[::2]:  # 隔一个打,省版面
         m = grid[w]
         star = "  ←最高R@3" if w == best_full else ""
-        print(f"   {w:>6} {m['r1']:>7.3f} {m['r3']:>7.3f} {m['r10']:>7.3f} {m['mrr']:>7.3f}{star}")
+        print(
+            f"   {w:>6} {m['r1']:>7.3f} {m['r3']:>7.3f} {m['r10']:>7.3f} {m['mrr']:>7.3f}{star}"
+        )
 
     # ── ③ 5 折交叉验证(每折在没见过的题上验证)──
     print("\n③ 5 折交叉验证 —— 每折选出的最优权重,看它们稳不稳")
@@ -136,7 +138,9 @@ def main() -> None:
         )
     lo, hi = min(picked), max(picked)
     print(f"\n   5 折各自选出的权重: {picked}")
-    print(f"   范围 {lo}~{hi} —— {'稳(都在小范围)' if hi - lo <= 0.3 else '不稳!说明最优权重在拟合噪声'}")
+    print(
+        f"   范围 {lo}~{hi} —— {'稳(都在小范围)' if hi - lo <= 0.3 else '不稳!说明最优权重在拟合噪声'}"
+    )
 
     # ── ④ 自助置信区间(混合 vs 纯向量,差异显著吗)──
     print("\n④ 自助置信区间(重抽 1000 次)—— 混合真的比纯向量好吗,还是运气?")
@@ -158,11 +162,15 @@ def main() -> None:
     lo3, hi3 = ci(diffs_r3)
     lom, him = ci(diffs_mrr)
     print(f"   权重={W} 相对纯向量的提升(95% 置信区间):")
-    print(f"     R@3  提升 [{lo3:+.3f}, {hi3:+.3f}]   {'✓ 显著(区间不含0)' if lo3 > 0 else '✗ 不显著(区间含0)'}")
-    print(f"     MRR  提升 [{lom:+.3f}, {him:+.3f}]   {'✓ 显著' if lom > 0 else '✗ 不显著'}")
+    print(
+        f"     R@3  提升 [{lo3:+.3f}, {hi3:+.3f}]   {'✓ 显著(区间不含0)' if lo3 > 0 else '✗ 不显著(区间含0)'}"
+    )
+    print(
+        f"     MRR  提升 [{lom:+.3f}, {him:+.3f}]   {'✓ 显著' if lom > 0 else '✗ 不显著'}"
+    )
 
     print(f"\n{'═' * 60}")
-    print("结论要点(面试能讲的):")
+    print("结论要点:")
     print(f"  · 全量最优权重 {best_full},但那是过拟合的数字")
     print(f"  · 交叉验证权重范围 {lo}~{hi},这才是可信区间")
     print("  · 是否显著看置信区间是否含 0 —— 不含才敢说'确实更好'")

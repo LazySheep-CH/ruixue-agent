@@ -38,7 +38,7 @@ def test_chunk_document_parent_child():
         sha256="h",
         source="期刊论文",
         parser="mineru",
-        # 注意:正文要用【真实长度】(≥10字),不能用"用了A"这种玩具数据 ——
+        # 注意:正文长度须 ≥10 字(过短会被垃圾过滤器剔除)——
         # 子块垃圾过滤会把 <10 字的当噪声丢掉(真实语料里 <10 字的 100% 是垃圾)
         elements=[
             _el("heading", "1 方法", 2),
@@ -105,7 +105,7 @@ def test_junk_chunks_are_filtered():
 
 
 def test_figure_captions_survive():
-    """★ 不能误伤图注:它们 10~20 字,有检索价值(实测这个区间有三成是图注)。"""
+    """不能误伤图注:它们 10~20 字,有检索价值(实测这个区间有三成是图注)。"""
     doc = _doc(
         [
             _el("heading", "2 结果", 2),
@@ -146,7 +146,7 @@ def test_table_becomes_row_sentences():
 
 
 def test_table_cells_latex_is_cleaned():
-    """★ 表格单元格里的行内 LaTeX 也要转 —— clean 阶段跳过了表格,这些一直没被清过。"""
+    """表格单元格里的行内 LaTeX 也要转 —— clean 阶段跳过了表格,这些一直没被清过。"""
     html = (
         "<table>"
         "<tr><td>处理</td><td> $\\mathrm { P } _ { 2 } 0 _ { 5 }$ </td></tr>"

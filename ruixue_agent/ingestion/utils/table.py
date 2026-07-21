@@ -15,8 +15,8 @@
         ↑ 每行【自带表名+列名】= 完整独立的一句话
           → 是人话(能 embedding)、能按行切(不怕超长)、每块都有上下文
 
-原始 HTML 仍存在 Element.meta 里(结构不丢)—— 这就是企业级的"表格多形态":
-结构留着备用,embedding 用人话。
+原始 HTML 仍存于 Element.meta,结构不丢失:结构化形态留作备用,
+embedding 使用自然语言形态。
 """
 
 from __future__ import annotations

@@ -37,7 +37,7 @@ def test_extract_metadata_v2():
     assert doc.meta["title"] == "PBAT地膜在棉花上的应用研究"
     assert doc.meta["year"] == 2024
     assert doc.meta["doi"] == "10.1234/abc.2024"
-    # ★ 关键词是作者亲手声明的主题 —— 比拿词典猜的准
+    # 关键词是作者亲手声明的主题 —— 比拿词典猜的准
     assert doc.meta["keywords"] == ["PBAT", "可降解地膜", "棉花", "降解特性"]
     assert "新疆棉区" in doc.meta["abstract"]
 

@@ -35,7 +35,7 @@ def _strip_marks(s: str, mode: str) -> str:
     """处理 pylatexenc 留下的 _ 和 ^ 标记。"""
     if mode == "unicode":
         # 注意:pylatexenc 逐字符输出,标记后面是 "^ - 1" 这样带空格的
-        #      → 组内必须允许空格,否则只吃到第一个字符(踩过的坑)
+        #      → 捕获组必须允许空格,否则只匹配到第一个字符
         def sup(m):
             return m.group(1).replace(" ", "").translate(_SUP)
 
@@ -54,11 +54,11 @@ def latex_to_text(latex: str, superscript: str = "plain") -> str:
     superscript: "plain"   → g·kg-1 / NH3 / 60°C   (纯文本,字符常见)
                  "unicode" → g·kg⁻¹ / NH₃ / 60°C  (好看,但字符生僻)
 
-    默认 plain,实测决定的(不再是待办):
+    默认 plain,依据实测:
       · embedding 层对两种形式几乎无差别(相似度 0.91~0.98,跨形式也能搜到)
       · BM25 层两种形式分词结果不同(kg-1→"kg 1" vs kg⁻¹→"kg ¹"),必须统一
       · 用户键盘只打得出 plain,所以统一成 plain
-    检索侧的兜底在 rag/tokenize.py:分词时也会把残留的 unicode 上标抹成 plain。
+    检索侧的兜底在 rag/text_segment.py:分词时会把残留的 unicode 上标归一化成 plain。
     """
     try:
         s = _conv.latex_to_text(latex)  # ← 重活:库来干

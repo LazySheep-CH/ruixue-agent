@@ -25,14 +25,21 @@ class FakeStore:
         self.last_call: dict = {}
 
     def search(self, query, k=3, year_min=None, source=None):
-        self.last_call = {"query": query, "k": k, "year_min": year_min, "source": source}
+        self.last_call = {
+            "query": query,
+            "k": k,
+            "year_min": year_min,
+            "source": source,
+        }
         return self.hits[:k]
 
 
 class FakeRow:
     """假的 ChunkRow —— 只带 Retriever 会用到的字段。"""
 
-    def __init__(self, chunk_id, text, parent_id=None, section_path=None, document_id="d1"):
+    def __init__(
+        self, chunk_id, text, parent_id=None, section_path=None, document_id="d1"
+    ):
         self.chunk_id = chunk_id
         self.text = text
         self.parent_id = parent_id
@@ -64,8 +71,12 @@ def rows():
         "P1": FakeRow("P1", "1.1 主要原料。PBAT 牌号 TH801T,蓝山屯河。密度 1.26。"),
         "P1_c0": FakeRow("P1_c0", "PBAT 牌号 TH801T,蓝山屯河。", parent_id="P1"),
         "P1_c1": FakeRow("P1_c1", "密度 1.26。", parent_id="P1"),
-        "P2": FakeRow("P2", "2.1 测试方法。按 GB/T 1040 测拉伸强度。", document_id="d2"),
-        "P2_c0": FakeRow("P2_c0", "按 GB/T 1040 测拉伸强度。", parent_id="P2", document_id="d2"),
+        "P2": FakeRow(
+            "P2", "2.1 测试方法。按 GB/T 1040 测拉伸强度。", document_id="d2"
+        ),
+        "P2_c0": FakeRow(
+            "P2_c0", "按 GB/T 1040 测拉伸强度。", parent_id="P2", document_id="d2"
+        ),
     }
 
 
@@ -73,7 +84,7 @@ def rows():
 
 
 def test_returns_parent_text_not_child_text(rows):
-    """★ Small-to-Big 的全部意义:子块负责【被搜到】,父块负责【被返回】。
+    """Small-to-Big 的全部意义:子块负责【被搜到】,父块负责【被返回】。
 
     给 LLM 的必须是父块 —— 子块太碎,LLM 看不出上下文。
     """
@@ -83,11 +94,13 @@ def test_returns_parent_text_not_child_text(rows):
 
     assert len(got) == 1
     assert got[0].chunk_id == "P1"  # 父块
-    assert "密度 1.26" in got[0].text  # 父块含子块没有的上下文 ← 这就是 Small-to-Big 的收益
+    assert (
+        "密度 1.26" in got[0].text
+    )  # 父块含子块没有的上下文 ← 这就是 Small-to-Big 的收益
 
 
 def test_dedups_parents(rows):
-    """★ 决策①:3 个子块可能都来自【同一个父块】。
+    """决策①:3 个子块可能都来自【同一个父块】。
 
     同一节里三句话都跟问题相关 —— 这恰恰说明那一节是对的。
     但不能把同一段父块文本重复三遍塞给 LLM:白烧 token,
@@ -117,7 +130,7 @@ def test_dedup_preserves_similarity_order(rows):
 
 
 def test_overfetches_children_to_fill_k_parents(rows):
-    """★ 决策①的答案:用户要 k 个【父块】,就得多搜几个子块。
+    """决策①的答案:用户要 k 个【父块】,就得多搜几个子块。
 
     只搜 3 个子块 → 可能全来自 1 个父块 → 只还 1 个,用户要 3 个。
     所以要【超取】:搜 k * fanout 个子块,去重后取前 k 个父块。
@@ -144,7 +157,7 @@ def test_returns_at_most_k_parents(rows):
 
 
 def test_parent_score_is_best_child_score(rows):
-    """★ 决策②:父块自己没有分数 —— Milvus 给的是子块的。
+    """决策②:父块自己没有分数 —— Milvus 给的是子块的。
 
     P1 命中两个子块(0.82 和 0.71),父块 P1 算几分?
     取【最高】那个:一节里最相关的那句话,代表这一节的相关度。
@@ -161,7 +174,7 @@ def test_parent_score_is_best_child_score(rows):
 
 
 def test_result_carries_provenance(rows):
-    """★ 决策③:LLM 光有文本不够,还得知道【这话哪儿来的】。
+    """决策③:LLM 光有文本不够,还得知道【这话哪儿来的】。
 
     没有出处 = 用户没法核实 = 这个 RAG 不能用在生产上。
     地膜标准这种场景尤其:答错了是要赔钱的。
