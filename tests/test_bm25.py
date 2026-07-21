@@ -47,7 +47,7 @@ def _query(total, df, question):
 
 
 def test_keeps_only_rare_terms():
-    """★ 核心:常见词被丢掉,只留罕见词。
+    """核心:常见词被丢掉,只留罕见词。
 
     这是整个模块的命根子。实测:一个罕见词 + 七个常见词做 OR,
     常见词把候选灌到几万,罕见词的定位能力被淹没,又慢又不准。
@@ -61,7 +61,7 @@ def test_keeps_only_rare_terms():
 def test_terms_not_in_df_are_rarest():
     """词频表里【没有】的词 = df 0 = 最罕见,必须保留。
 
-    踩过:早期误判"查询里没有罕见词",因为只看了 df=0 的词却把它们算成"有"。
+    注意:仅统计 df=0 的词会漏掉低频但存在的词,导致误判"查询里没有罕见词"。
     索引里没有的词恰恰是最该用的。
     """
     q = _query(1000, {"土壤": 400}, "沙雅县土壤")  # 沙雅县不在词频表
@@ -72,7 +72,7 @@ def test_terms_not_in_df_are_rarest():
 def test_all_common_keeps_some():
     """全是常见词时,退而取最罕见的几个 —— 不能返回空、也不能返回全部。
 
-    踩过:fallback 用全部词,导致候选灌爆、比不 fallback 还慢。
+    fallback 若回退为全部词,候选集会被撑爆,比不回退更慢。
     """
     q = _query(1000, {"土壤": 400, "地膜": 440, "影响": 370}, "地膜对土壤的影响")
     assert q  # 不为空

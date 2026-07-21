@@ -122,13 +122,13 @@ def _count(session, model, **where) -> int:
     为什么不用 session.query(X).count():那是在数全表,等于假设"库里只有我的测试数据"。
     库里一旦有别的东西(比如真实数据、别的测试留下的),断言就红 ——
     而那根本不是被测代码的错。测试要盯住自己那一亩三分地。
-    (踩过:这个文件第一版就是这么写的,库里灌了 1578 篇真数据后集体翻车)
+    (count 全表的断言在库里存在真实数据时会集体失败。)
     """
     return session.query(model).filter_by(**where).count()
 
 
 def test_save_document_twice_is_idempotent(repo, session):
-    """★ 核心需求:同一篇存两次 = 库里还是 1 行,且不报错。
+    """核心需求:同一篇存两次 = 库里还是 1 行,且不报错。
 
     为什么这条最重要:灌 1578 篇的过程中挂了(网断/OOM/手滑 Ctrl-C),
     你必须能【直接重跑】。如果重跑会因为主键冲突炸掉,你就只能
@@ -172,7 +172,7 @@ def test_save_chunks_writes_parent_and_children(repo, session):
 
 
 def test_save_chunks_handles_child_before_parent(repo, session):
-    """★ 核心需求:哪怕子块【排在父块前面】传进来,也要能存进去。
+    """核心需求:哪怕子块【排在父块前面】传进来,也要能存进去。
 
     为什么会炸:chunks 表有自引用外键 parent_id → chunks.chunk_id。
     先插子块时,它爹还不存在 → PG 直接拒绝(违反外键)。
@@ -212,7 +212,7 @@ def test_save_empty_chunks_is_noop(repo, session):
 def test_tsv_is_populated_by_trigger(repo, session):
     """text_tsv 由数据库触发器从 text_tokens 生成 —— repository 不许自己填 tsv。
 
-    ⚠ 分工在 migration 0002 变了:
+    注意:分工在 migration 0002 变了:
         0001: 触发器读 text      —— 但 simple 配置不切中文,整句一个 token,索引是废的
         0002: 触发器读 text_tokens —— Python 侧 jieba 分好词写进来,PG 只负责转 tsvector
       分词是 Python 的活(能加领域词典、能测),转 tsvector 是数据库的活。

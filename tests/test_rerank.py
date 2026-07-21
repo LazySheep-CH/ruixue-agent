@@ -86,7 +86,7 @@ def rows():
 
 
 def test_rerank_promotes_relevant_parent(rows):
-    """★ 核心:检索把无关的排前面,rerank 应该把相关的顶上来。
+    """核心:检索把无关的排前面,rerank 应该把相关的顶上来。
 
     向量把 P1(施肥,无关)排在 P2(降解,相关)前面 —— 这正是 R@1 低的场景。
     rerank 看 query"降解"应该纠正过来。
@@ -110,7 +110,7 @@ def test_no_reranker_keeps_retrieval_order(rows):
 
 
 def test_rerank_over_fetches_before_truncate(rows):
-    """★ rerank 必须在【截断前】拿到超取的候选,否则无米下锅。
+    """rerank 必须在【截断前】拿到超取的候选,否则无米下锅。
 
     要 k=1,但检索超取了 2 个候选。如果先截到 1 再 rerank,P2 就没了。
     正确行为:rerank 看到 2 个,把 P2 顶上来,再截到 1。
