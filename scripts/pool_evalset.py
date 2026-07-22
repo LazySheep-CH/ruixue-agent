@@ -1,32 +1,21 @@
-"""Pooling:把"只标一个标准答案"补全成"所有能答的都算标准答案"。
+"""TREC 式 pooling:把单标注升级成多标注 + relevance 分级(修正尺子偏严)。
 
-═══ 为什么必须做这一步 ═══
+═══ 为什么 ═══
+出题只绑 1 个 gold,但库里 26 万块,一个问题(尤其口语题)常有多篇能答。检索找到
+另一篇有效的却被判未命中 → 系统性【低估】Recall。这不是检索差,是标注口径窄。
+多标注是企业/微软/RAGAS 检索评测的前提(算 nDCG 也需要分级)。
 
-出题时我们只知道一个 gold —— 就是出题的那个 chunk。但库里有 26 万块,
-另一段同样能回答的段落几乎必然存在,检索器返回它却被判 0 分 ——
-测得的不是检索质量,而是标注缺口。
+═══ 怎么做(吸取上次 reranker 翻车的教训)═══
+上次用本地 reranker 当 judge → 它把"同话题"给 0.9+,过度标注、把 recall 刷虚高。
+这次:① 多路建池(向量+BM25,不同原理都进池)② 用 LLM judge,且 prompt 严格区分
+"能答出那个具体点"(2-3 分)和"只是同话题"(1 分)③ 保守:宁可给低。
+relevance:3 直接完整含核心事实 / 2 必要证据的一部分 / 1 同话题答不出 / 0 无关。
+gold(算 Recall/MRR)= relevance≥2;nDCG 用完整分级。primary_gold(出题确认过)记 3。
 
-TREC(信息检索领域几十年的评测标准)的解法叫 pooling:
-    1. 用【多个不同的检索器】各捞 top-N 候选
-    2. 合并成一个候选池(pool)
-    3. 逐条让裁判判"这段到底能不能回答这个问题"
-    4. 能答的【全部】算标准答案
-
-为什么要【多个】检索器而不是一个:
-    只用向量检索捞候选的话,池子里全是"向量觉得像"的东西 ——
-    向量漏掉的(比如精确的数字、型号)永远进不了池,永远不会被标成 gold。
-    那 BM25 找到它时反而被判错。所以必须让不同原理的检索器都往池里丢。
-    这里用:向量检索(语义)+ PG 全文检索(词法)。
-
-注意:Pooling 的已知局限(TREC 也有,这是公认的代价):
-    池子只覆盖【参与 pooling 的检索器】能找到的东西。
-    将来来个全新原理的检索器,它找到的正确答案可能不在池里 → 被低估。
-    缓解办法就是让池子尽量多样。我们两种原理都放了。
-
-用法:
-    uv run python scripts/pool_evalset.py            # 补全 gold
-    uv run python scripts/pool_evalset.py --depth 15 # 每个检索器捞多少
+用法:uv run python scripts/pool_evalset.py [--depth 10]
 """
+
+from __future__ import annotations
 
 import argparse
 import json
@@ -36,156 +25,143 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ruixue_agent.models import create_model
 from ruixue_agent.persistence.engine import get_engine
 from ruixue_agent.persistence.repository import PgRepository
+from ruixue_agent.rag.bm25 import Bm25Search
 from ruixue_agent.rag.milvus_store import MilvusVectorStore
-from ruixue_agent.rag.retriever import Retriever
 
 sys.stdout.reconfigure(encoding="utf-8")
+EVAL = Path("data/eval/evalset.jsonl")
 
-EVALSET = Path("data/eval/evalset.jsonl")
+_JUDGE = """判断下面这段【内容】对【问题】的相关程度,按四级打分:
+3 = 直接且完整地包含回答这个问题所需的核心事实——单看这段就能答出问题问的那个具体点
+2 = 包含回答所需的必要证据,但只是一部分,单独不足以完整回答
+1 = 与问题同主题,但答不出问题问的那个具体点(比如只泛泛谈到这个话题)
+0 = 与问题无关
 
-_JUDGE = """判断下面这段内容能不能回答这个问题。
+关键:只有能给出"问题问的那个具体答案"才给 2 或 3;"只是聊到同一个话题、给不出那个数/那个结论"一律给 1。宁可给低,不要给高。
 
-问题:{question}
+问题:{q}
 
 内容:
 \"\"\"
-{text}
+{t}
 \"\"\"
 
-标准:内容里要有【直接支撑答案的信息】。
-  - 只是同一个话题、但答不出具体答案 → 不算
-  - 能答出问题问的那个点 → 算
-
-只输出 JSON:{{"can_answer": true/false}}"""
+只输出一个数字(0/1/2/3),不要解释。"""
 
 
-def _lexical_search(conn, query: str, k: int) -> list[str]:
-    """PG 全文检索捞候选 —— 和向量【不同原理】,这正是它进池子的意义。
-
-    用的是 chunks.text_tsv 那一列(触发器一直在维护)。
-    ts_rank 不是严格的 BM25,但同属词法排序 —— 对 pooling 来说足够:
-    我们要的是"向量漏掉的、靠关键词能找到的东西"也能进池。
-
-    注意:'simple' 配置不做中文分词(已知技术债),所以它主要在英文术语、
-      数字、型号上发力 —— 而那恰好是向量最弱的地方。互补正好。
-    """
-    rows = conn.execute(
-        text("""
-        SELECT c.chunk_id, ts_rank(p.text_tsv, plainto_tsquery('simple', :q)) AS rank
-        FROM chunks c JOIN chunks p ON p.chunk_id = c.chunk_id
-        WHERE c.kind = 'parent' AND p.text_tsv @@ plainto_tsquery('simple', :q)
-        ORDER BY rank DESC LIMIT :k
-    """),
-        {"q": query, "k": k},
-    ).all()
-    return [r[0] for r in rows]
+def build_pool(store, repo, bm25, question, seed, depth):
+    """多路建父块候选池:向量(子块折父)+ BM25(父块)+ seed 保底。"""
+    hits = store.search(question, k=depth * 5)  # 子块
+    sbc = {cid: s for cid, s in hits}
+    best = {}
+    for c in repo.get_chunks(list(sbc)):
+        if c.parent_id and sbc[c.chunk_id] > best.get(c.parent_id, -1e9):
+            best[c.parent_id] = sbc[c.chunk_id]
+    vec = [p for p, _ in sorted(best.items(), key=lambda kv: -kv[1])[:depth]]
+    lex = [p for p, _ in bm25.search(question, k=depth)]
+    return list(dict.fromkeys([*seed, *vec, *lex]))
 
 
-def main() -> None:
+def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--depth", type=int, default=12, help="每个检索器往池里丢多少")
-    ap.add_argument("--workers", type=int, default=8)
+    ap.add_argument("--depth", type=int, default=10)
     ap.add_argument("--model", default="deepseek-v4-flash")
     args = ap.parse_args()
 
-    qs = [json.loads(x) for x in EVALSET.read_text(encoding="utf-8").splitlines()]
-    print(f"评测集 {len(qs)} 题,每个检索器捞 {args.depth} 个候选\n")
+    qs = [json.loads(x) for x in EVAL.read_text(encoding="utf-8").splitlines()]
+    ans = [q for q in qs if q.get("has_answer")]
+    print(f"评测集 {len(qs)} 题(有答案 {len(ans)}),每路捞 {args.depth} 候选\n")
 
-    llm = create_model(args.model)
     store = MilvusVectorStore()
-    engine = get_engine()
+    llm = create_model(args.model)
 
-    # ── 建池 ──
-    print("① 建候选池(向量 + 全文,两种原理)…")
+    # ① 建池
+    print("① 多路建候选池(向量+BM25)…")
     t0 = time.time()
-    pools: list[list[str]] = []
-    with Session(engine) as sess, engine.connect() as conn:
-        r = Retriever(store, PgRepository(sess))
-        r.search("预热", k=1)
-        for i, q in enumerate(qs):
-            vec = [h.chunk_id for h in r.search(q["question"], k=args.depth)]
-            lex = _lexical_search(conn, q["question"], args.depth)
-            # 已知的 gold 也丢进去 —— 它必然能答(出题就是它出的),
-            # 但万一两个检索器都没捞到它,也得在池里
-            pool = list(dict.fromkeys([*q["gold_chunk_ids"], *vec, *lex]))
-            pools.append(pool)
-            if (i + 1) % 40 == 0:
-                print(
-                    f"   {i + 1}/{len(qs)}  平均池大小 {sum(len(p) for p in pools) / len(pools):.1f}"
-                )
+    pools = {}
+    with Session(get_engine()) as sess:
+        repo = PgRepository(sess)
+        bm25 = Bm25Search(sess)
+        store.search("预热", k=1)
+        for i, q in enumerate(ans):
+            seed = [g for g in q.get("gold_chunk_ids", []) if g]
+            pools[q["question"]] = build_pool(store, repo, bm25, q["question"], seed, args.depth)
+            if (i + 1) % 60 == 0:
+                print(f"   {i + 1}/{len(ans)}")
+        # 取候选正文
+        all_ids = list({c for p in pools.values() for c in p})
+        texts = {r.chunk_id: r.text for r in repo.get_chunks(all_ids)}
+    avg_pool = sum(len(p) for p in pools.values()) / len(pools)
+    print(f"   池均 {avg_pool:.1f} 候选  ({time.time() - t0:.0f}s)\n")
 
-    sizes = [len(p) for p in pools]
-    print(
-        f"   池平均 {sum(sizes) / len(sizes):.1f} 个候选,共 {sum(sizes)} 条要判  ({time.time() - t0:.0f}s)\n"
-    )
-
-    # ── 取文本 ──
-    all_ids = list({cid for p in pools for cid in p})
-    with Session(engine) as sess:
-        rows = PgRepository(sess).get_chunks(all_ids)
-        texts = {row.chunk_id: row.text for row in rows}
-
-    # ── 逐条裁判 ──
-    print(f"② 裁判逐条判(共 {sum(sizes)} 条)…")
+    # ② LLM judge(seed 直接记 3,不判)
+    print("② LLM judge 逐候选评 relevance(严格)…")
     t0 = time.time()
+    jobs = []  # (question, cid)
+    for q in ans:
+        seeds = set(g for g in q.get("gold_chunk_ids", []) if g)
+        for c in pools[q["question"]]:
+            if c not in seeds and c in texts:
+                jobs.append((q["question"], c))
 
     def judge(item):
-        qi, cid = item
-        if cid == qs[qi]["primary_gold"]:
-            return qi, cid, True  # 出题的那个,不用判,省一次调用
-        txt = texts.get(cid)
-        if not txt:
-            return qi, cid, False
+        ques, cid = item
         try:
-            raw = llm.invoke(
-                _JUDGE.format(question=qs[qi]["question"], text=txt[:1500])
-            ).content
-            raw = raw[raw.find("{") : raw.rfind("}") + 1]
-            return qi, cid, bool(json.loads(raw).get("can_answer"))
+            raw = llm.invoke(_JUDGE.format(q=ques, t=texts[cid][:1400])).content.strip()
+            d = next((ch for ch in raw if ch in "0123"), "0")
+            return ques, cid, int(d)
         except Exception:
-            return qi, cid, False  # 判不了就当不能答 —— 保守:宁可少标,不可错标
+            return ques, cid, 0  # 判不了当无关(保守:宁少不多)
 
-    jobs = [(qi, cid) for qi, p in enumerate(pools) for cid in p]
-    golds: list[set[str]] = [set() for _ in qs]
+    rel = {q["question"]: {} for q in ans}
+    for q in ans:  # seed 记 3
+        for g in q.get("gold_chunk_ids", []):
+            if g:
+                rel[q["question"]][g] = 3
     done = 0
-    with ThreadPoolExecutor(max_workers=args.workers) as pool_exec:
-        for qi, cid, ok in pool_exec.map(judge, jobs):
-            if ok:
-                golds[qi].add(cid)
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        for ques, cid, grade in ex.map(judge, jobs):
+            if grade >= 1:
+                rel[ques][cid] = grade
             done += 1
-            if done % 200 == 0:
+            if done % 400 == 0:
                 print(f"   {done}/{len(jobs)}  ({time.time() - t0:.0f}s)")
+    print(f"   judge 完成 {len(jobs)} 次  ({time.time() - t0:.0f}s)\n")
 
-    # ── 写回 ──
-    for q, g in zip(qs, golds):
-        g.add(q["primary_gold"])  # 兜底:出题的那个永远算 gold
-        q["gold_chunk_ids"] = sorted(g)
-
-    with EVALSET.open("w", encoding="utf-8") as f:
-        for q in qs:
-            f.write(json.dumps(q, ensure_ascii=False) + "\n")
-
-    n_gold = [len(q["gold_chunk_ids"]) for q in qs]
-    print(f"\n{'═' * 66}")
-    print(f"补全完成,耗时 {time.time() - t0:.0f}s")
-    print(f"  每题标准答案数:平均 {sum(n_gold) / len(n_gold):.2f},最多 {max(n_gold)}")
-    print(f"  分布:{dict(sorted(Counter(n_gold).items()))}")
-    print(f"  只有 1 个 gold 的题:{sum(1 for x in n_gold if x == 1)}/{len(qs)}")
-    print("\n标准答案数大于 1 的题,是此前单标签评测会误判为未命中的部分;")
-    print("比例越高,说明单标签评测的低估越严重。")
-
-    print("\n按题型看平均 gold 数(高 = 这类题本来就有多个正确答案):")
-    by_kind: dict[str, list[int]] = {}
+    # ③ 写回:relevance 全分级;gold_chunk_ids = relevance≥2
     for q in qs:
-        by_kind.setdefault(q["kind"], []).append(len(q["gold_chunk_ids"]))
-    for k, v in sorted(by_kind.items(), key=lambda kv: -sum(kv[1]) / len(kv[1])):
-        print(f"  {k:6}: {sum(v) / len(v):.2f}  (n={len(v)})")
+        if not q.get("has_answer"):
+            q["relevance"] = {}
+            continue
+        r = rel[q["question"]]
+        q["relevance"] = r
+        q["gold_chunk_ids"] = sorted([c for c, g in r.items() if g >= 2])
+        if q.get("primary_gold") and q["primary_gold"] not in q["gold_chunk_ids"]:
+            q["gold_chunk_ids"].append(q["primary_gold"])  # 保底
+    EVAL.write_text("\n".join(json.dumps(q, ensure_ascii=False) for q in qs) + "\n", encoding="utf-8")
+
+    # ④ 质量检查
+    ng = [len(q["gold_chunk_ids"]) for q in ans]
+    print(f"{'═' * 60}\n质量检查\n{'═' * 60}")
+    print(f"  每题 gold 数(rel≥2):平均 {sum(ng) / len(ng):.2f},最多 {max(ng)}")
+    print(f"  分布:{dict(sorted(Counter(ng).items()))}")
+    print(f"  只有 1 个 gold 的题:{sum(1 for x in ng if x == 1)}/{len(ans)}"
+          f"(比例越低,说明单标注低估越严重)")
+    by = {}
+    for q in ans:
+        by.setdefault(q["strategy"], []).append(len(q["gold_chunk_ids"]))
+    print("  按策略平均 gold 数:")
+    for s, v in by.items():
+        print(f"    {s:9} {sum(v) / len(v):.2f}")
+    # 抽查:primary_gold 都在 gold 里(保底)
+    miss = [q["question"] for q in ans if q.get("primary_gold") and q["primary_gold"] not in q["gold_chunk_ids"]]
+    print(f"  primary_gold 保底检查:{'✓ 全部在 gold 内' if not miss else f'✗ {len(miss)} 题缺失'}")
+    print(f"\n→ 已写回 {EVAL}")
 
 
 if __name__ == "__main__":
