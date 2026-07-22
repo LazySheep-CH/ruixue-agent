@@ -14,8 +14,9 @@ from ruixue_agent.rag.fusion import rrf
 
 # 超取倍数:交付 k 个父块需要检索 k * _FANOUT 个子块。
 # 检索粒度是子块、交付粒度是父块,多对一 —— 命中的子块可能集中在同一父块,
-# 不超取则去重后不足 k 个。倍数待评测数据进一步标定。
-_FANOUT = 3
+# 不超取则去重后不足 k 个。=2 由 fanout 扫描定:候选太多会淹没 rerank 精排,
+# 2 是甜点(Recall 不掉、rerank 计算省近半),见 docs/检索优化记录.md。
+_FANOUT = 2
 
 # RRF 中词法路的权重(向量路固定 1.0)。由交叉验证 + bootstrap 置信区间选定
 # (scripts/tune_weight.py),150 题评测集上的结论:
@@ -47,18 +48,21 @@ class Hit:
 
 class Retriever:
     def __init__(
-        self, store, repo, bm25=None, weights=(1.0, _BM25_WEIGHT), reranker=None
+        self, store, repo, bm25=None, weights=(1.0, _BM25_WEIGHT), reranker=None,
+        rewriter=None,
     ) -> None:
         """store: 向量检索(须有 .search());repo: 文本存取(须有 .get_chunks())。
 
-        bm25、reranker 均为可选组件,None 即关闭,行为与未引入前完全一致。
+        bm25、reranker、rewriter 均为可选组件,None 即关闭,行为与未引入前完全一致。
         每层能力都是"开/关只差一个参数",评测时可逐层 A/B、单独量化各层增益。
+        rewriter 带闸门只改口语查询,实测 338 题 user R@3 +0.060、fact/multihop 零误伤。
         """
         self.store = store
         self.repo = repo
         self.bm25 = bm25
         self.weights = weights  # (向量权重, 词法权重)
         self.reranker = reranker
+        self.rewriter = rewriter
 
     def search(
         self,
@@ -68,9 +72,16 @@ class Retriever:
         source: str | None = None,
     ) -> list[Hit]:
         """检索并返回 top-k 父块,附相关度与出处。"""
+        # 0. 查询改写(可选):口语→术语再检索,补 embedding 对口语的弱势。改写只用于
+        #    【检索】(向量+词法);重排仍喂【原始问题】—— 重排匹配的是用户真实意图,
+        #    不是改写后的措辞。改写器自带闸门(术语题原样放过),失败自动回退原查询。
+        retr_query = self.rewriter.rewrite(query) if self.rewriter else query
+
         # 1. 向量检索子块,按超取倍数放大。过滤条件透传给 Milvus 做前过滤,
         #    在本层筛(后过滤)可能把候选筛空。
-        hits = self.store.search(query, k=k * _FANOUT, year_min=year_min, source=source)
+        hits = self.store.search(
+            retr_query, k=k * _FANOUT, year_min=year_min, source=source
+        )
         if not hits:
             return []
 
@@ -99,7 +110,7 @@ class Retriever:
         #    直接相加等于让量纲大的一方主导。RRF 只比较排名,见 fusion.py。
         if self.bm25 is not None:
             lex_ranking = self.bm25.search(
-                query, k=k * _FANOUT, year_min=year_min, source=source
+                retr_query, k=k * _FANOUT, year_min=year_min, source=source
             )
             ranked = rrf([ranked, lex_ranking], weights=list(self.weights))
 
