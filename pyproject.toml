@@ -66,6 +66,9 @@ build-backend = "hatchling.build"
 packages = ["ruixue_agent", "ruixue_app"]
 
 [tool.pytest.ini_options]
+# 只在 tests/ 里找测试。scripts/ 下有手动测试脚本(test_stream.py 等),
+# 名字也叫 test_*,但它们要连真服务、不是单元测试 —— 不锁范围会被误收集、报错。
+testpaths = ["tests"]
 # Windows 上 pytest 默认在系统临时目录用 symlink，清理时常撞权限错误(WinError 5)。
 # 显式指定一个【项目内】的临时目录，pytest 就不再走 symlink 那套，绕开这个坑。
 addopts = "--basetemp=.pytest_tmp"
