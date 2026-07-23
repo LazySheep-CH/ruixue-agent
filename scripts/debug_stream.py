@@ -6,7 +6,7 @@ import sys
 
 sys.stdout.reconfigure(encoding="utf-8")
 
-from ruixue_agent.agent import create_ruixue_agent
+from ruixue_agent.agents import create_ruixue_agent
 
 agent = create_ruixue_agent()
 config = {"configurable": {"thread_id": "dbg2"}}
