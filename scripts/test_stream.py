@@ -1,7 +1,7 @@
 """流式测试客户端:请求 /chat/stream,解析 JSON-SSE,区分"思考"和"答案"逐块打印。
 
 用法:
-    1. 另开终端起服务:uv run uvicorn ruixue_agent.api:app --reload
+    1. 另开终端起服务:uv run uvicorn ruixue_app.main:app --reload
     2. 本脚本:        uv run python scripts/test_stream.py
 """
 

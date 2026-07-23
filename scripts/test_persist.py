@@ -17,7 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.stdout.reconfigure(encoding="utf-8")
 
-from ruixue_agent.agent import create_ruixue_agent
+from ruixue_agent.agents import create_ruixue_agent
 
 question = sys.argv[1] if len(sys.argv) > 1 else "你好"
 

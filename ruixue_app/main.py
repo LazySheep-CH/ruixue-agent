@@ -1,6 +1,6 @@
 """FastAPI 服务:把 agent 包成 HTTP 接口(POST /chat)。
 
-起服务:uv run uvicorn ruixue_agent.api:app --reload
+起服务:uv run uvicorn ruixue_app.main:app --reload
 测试:  浏览器开 http://127.0.0.1:8000/docs —— 自动生成的接口文档,能直接点着测。
 前置:  docker 起着(agent 要调 RAG)。
 """
@@ -10,7 +10,10 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import json
 
-from ruixue_agent.agent import create_ruixue_agent
+from ruixue_agent.agents import create_ruixue_agent
+
+import logging
+logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(title="瑞雪地膜智能助手")
 
