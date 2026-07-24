@@ -6,6 +6,8 @@
 """
 
 from fastapi import FastAPI
+from fastapi import Depends
+from ruixue_app.auth import get_current_user
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import json
@@ -46,8 +48,12 @@ class ChatResponse(BaseModel):
 #   4. 取 result["messages"][-1].content,包成 ChatResponse(answer=...) 返回
 # ============================================================
 @app.post("/chat")
-def chat(req: ChatRequest) -> ChatResponse:
-    config = {"configurable": {"thread_id": req.thread_id}}
+def chat(
+    req: ChatRequest,
+    user_id: str = Depends(get_current_user),      # ← 加：先认证，拿 user_id
+) -> ChatResponse:
+    thread_id = f"{user_id}:{req.thread_id}"
+    config = {"configurable": {"thread_id": thread_id}}
     result = _agent.invoke(
         {"messages": [{"role": "user", "content": req.message}]}, config=config
     )
@@ -66,8 +72,12 @@ def chat(req: ChatRequest) -> ChatResponse:
 #   就 yield 一条 SSE:  f"data: {chunk.content}\n\n"   (data: 开头、\n\n 结尾是 SSE 格式)
 # ============================================================
 @app.post("/chat/stream")
-def chat_stream(req: ChatRequest):
-    config = {"configurable": {"thread_id": req.thread_id}}
+def chat_stream(
+    req: ChatRequest,
+    user_id: str = Depends(get_current_user),      # ← 加
+):
+    thread_id = f"{user_id}:{req.thread_id}"
+    config = {"configurable": {"thread_id": thread_id}}
 
     def event_generator():
         for chunk, meta in _agent.stream(
