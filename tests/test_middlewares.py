@@ -61,15 +61,35 @@ def test_error_handling_catches_exception_and_returns_message():
     mw = ToolErrorHandlingMiddleware()
 
     def failing_handler(req):
-        raise RuntimeError("Milvus 连不上")  # 模拟工具挂了
+        raise RuntimeError("boom")  # 模拟工具挂了
 
     # 能走到下一行(没抛异常),本身就证明异常被兜住了
     result = mw.wrap_tool_call(_FakeReq(call_id="call_42"), failing_handler)
 
     assert isinstance(result, ToolMessage)  # 返回的是 ToolMessage,不是异常
-    assert "工具执行失败" in result.content  # 内容里带失败说明,agent 能读懂
-    assert "Milvus 连不上" in result.content  # 保留了原始错误,便于排查
+    assert "执行失败" in result.content  # 内容里带失败说明,agent 能读懂
     assert result.tool_call_id == "call_42"  # 对应回原来那次工具调用
+
+
+def test_error_handling_does_not_leak_raw_detail():
+    """【安全】原始错误细节绝不能进返回给模型的内容里 —— 只放行异常【类型名】。
+
+    动机:工具的异常文字里常带内网 IP、数据库地址、用户名等敏感信息。
+    它会进大模型上下文,可能被复述给用户 = 泄露内部结构。
+    脱敏后:模型只知道"是 ConnectionError 这类错误",拿不到任何具体细节。
+    这条测试就是那道脱敏的"防倒退"闸门 —— 谁把细节漏回去,它立刻变红。
+    """
+    mw = ToolErrorHandlingMiddleware()
+    secret = "connect to host=10.0.1.5 user=admin password 认证失败"  # 假装的敏感信息
+
+    def failing_handler(req):
+        raise ConnectionError(secret)
+
+    result = mw.wrap_tool_call(_FakeReq(call_id="c1"), failing_handler)
+
+    assert secret not in result.content  # ← 核心:敏感原文绝不出现
+    assert "10.0.1.5" not in result.content  # 连内网 IP 的片段也不能有
+    assert "ConnectionError" in result.content  # 但类型名要给,模型才好应对
 
 
 def test_error_handling_logs_error(caplog):
