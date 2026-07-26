@@ -18,8 +18,10 @@ from slowapi.util import get_remote_address
 
 from ruixue_agent.agents import create_ruixue_agent
 from ruixue_app.auth import get_current_user
+from ruixue_app.observability import RequestIdMiddleware, configure_logging
 
-logging.basicConfig(level=logging.INFO)
+# 用带 request_id 的结构化日志格式,替代默认的 logging.basicConfig。
+configure_logging()
 
 # agent 先占位;真正在服务【启动】时才建(见下面的 lifespan)。
 _agent = None
@@ -45,6 +47,10 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="瑞雪地膜智能助手", lifespan=lifespan)
+
+# 请求追踪:每个请求发一个 request_id,贯穿日志、回写响应头。
+# 这是【HTTP 层】的中间件(套在整个请求外),和 agent 里的中间件是同一思想、不同层。
+app.add_middleware(RequestIdMiddleware)
 
 
 # ── 限流(Rate Limiting)────────────────────────────────────────
@@ -84,6 +90,40 @@ async def _handle_unexpected(request: Request, exc: Exception) -> JSONResponse:
         status_code=500,
         content={"detail": "服务器内部错误，请稍后重试"}
     )
+
+
+# ── 健康检查(可运维)──────────────────────────────────────────
+# 两种探针,别混:
+#   存活 /health       = "进程还活着吗" —— 挂了就重启它。故意【不查】数据库。
+#   就绪 /health/ready = "能真正干活吗" —— 依赖(数据库)连不上时,虽活着但不该接流量。
+# 负载均衡 / K8s 靠这两个探针决定:要不要重启、要不要把流量切走。
+@app.get("/health")
+def health():
+    """存活探针:只证明进程能响应,不碰任何外部依赖。"""
+    return {"status": "ok"}
+
+
+@app.get("/health/ready")
+def health_ready():
+    """就绪探针:数据库连得上才算 ready;连不上 -> 503,让上游把流量切走。"""
+    from sqlalchemy import text
+
+    from ruixue_agent.persistence.engine import get_engine
+
+    try:
+        # ===== (你写)=====
+        # 跑一句最轻的查询证明数据库是通的,通了就回 ready:
+        #   with get_engine().connect() as conn:
+        #       conn.execute(text("SELECT 1"))
+        #   return {"status": "ready"}
+        with get_engine().connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return {"status": "ready"}
+    except Exception:
+        # 连不上不是"服务器 bug",是"暂时没准备好" -> 用 503(Service Unavailable),
+        # 不是 500。完整原因进日志,响应只给一个状态词。
+        logger.exception("就绪检查失败:数据库连不上")
+        return JSONResponse(status_code=503, content={"status": "not_ready"})
 
 
 # ── 请求 / 响应模型 ────────────────────────────────────────────
