@@ -129,12 +129,8 @@ def upgrade() -> None:
             name="chunks_parent_rule",
         ),
         sa.CheckConstraint("kind IN ('parent', 'child')", name="chunks_kind_check"),
-        sa.ForeignKeyConstraint(
-            ["document_id"], ["documents.document_id"], ondelete="CASCADE"
-        ),
-        sa.ForeignKeyConstraint(
-            ["parent_id"], ["chunks.chunk_id"], ondelete="SET NULL"
-        ),
+        sa.ForeignKeyConstraint(["document_id"], ["documents.document_id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["parent_id"], ["chunks.chunk_id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("chunk_id"),
         comment="检索单元。父块子块同表,靠 kind 区分:子块进 Milvus 做向量检索,命中后返回父块给 LLM(Small-to-Big)",
     )
@@ -223,8 +219,6 @@ def downgrade() -> None:
     op.drop_table("chunks")
     op.drop_index("idx_documents_year", table_name="documents")
     op.drop_index("idx_documents_source", table_name="documents")
-    op.drop_index(
-        "idx_documents_keywords", table_name="documents", postgresql_using="gin"
-    )
+    op.drop_index("idx_documents_keywords", table_name="documents", postgresql_using="gin")
     op.drop_table("documents")
     # ### end Alembic commands ###

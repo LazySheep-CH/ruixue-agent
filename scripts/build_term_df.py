@@ -28,9 +28,7 @@ def main() -> None:
     t0 = time.time()
 
     with engine.begin() as conn:
-        total = conn.execute(
-            text("SELECT count(*) FROM chunks WHERE kind='parent'")
-        ).scalar()
+        total = conn.execute(text("SELECT count(*) FROM chunks WHERE kind='parent'")).scalar()
         print(f"统计 {total:,} 个父块的词频(ts_stat 全表扫,要等一下)…")
 
         conn.execute(text("TRUNCATE term_df"))

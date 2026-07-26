@@ -65,9 +65,7 @@ class MilvusVectorStore:
         index_params.add_index(field_name="year")
         index_params.add_index(field_name="source")
 
-        self.client.create_collection(
-            self.collection, schema=schema, index_params=index_params
-        )
+        self.client.create_collection(self.collection, schema=schema, index_params=index_params)
 
     def drop(self) -> None:
         if self.client.has_collection(self.collection):

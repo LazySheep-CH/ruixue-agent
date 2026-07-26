@@ -77,9 +77,7 @@ def test_schema_has_filter_fields(store):
     先搜 top10 再筛 2020 年后的,可能筛完剩 0 条。
     前过滤要求过滤字段在库里。
     """
-    fields = {
-        f["name"] for f in store.client.describe_collection(_TEST_COLLECTION)["fields"]
-    }
+    fields = {f["name"] for f in store.client.describe_collection(_TEST_COLLECTION)["fields"]}
     assert {"chunk_id", "vector", "year", "source"} <= fields
 
 

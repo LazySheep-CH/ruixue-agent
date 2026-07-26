@@ -144,9 +144,7 @@ class PgRepository:
             return []
 
         # 单次查询取回全部,避免 N+1
-        rows = self.session.scalars(
-            select(ChunkRow).where(ChunkRow.chunk_id.in_(chunk_ids))
-        ).all()
+        rows = self.session.scalars(select(ChunkRow).where(ChunkRow.chunk_id.in_(chunk_ids))).all()
 
         by_id = {r.chunk_id: r for r in rows}
         return [by_id[cid] for cid in chunk_ids if cid in by_id]
@@ -159,7 +157,5 @@ class PgRepository:
         顺序,最相关子块的父块排在最前。
         """
         children = self.get_chunks(child_ids)
-        parent_ids = list(
-            dict.fromkeys(c.parent_id for c in children if c.parent_id is not None)
-        )
+        parent_ids = list(dict.fromkeys(c.parent_id for c in children if c.parent_id is not None))
         return self.get_chunks(parent_ids)

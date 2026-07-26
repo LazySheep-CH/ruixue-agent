@@ -63,9 +63,7 @@ def main() -> None:
     args = ap.parse_args()
 
     env = os.environ.copy()
-    env["MINERU_MODEL_SOURCE"] = (
-        "huggingface"  # 模型已缓存;走这条是因为国内 modelscope 被代理掐
-    )
+    env["MINERU_MODEL_SOURCE"] = "huggingface"  # 模型已缓存;走这条是因为国内 modelscope 被代理掐
     env["HTTP_PROXY"] = env["HTTPS_PROXY"] = "http://127.0.0.1:10808"
     env["PYTHONUTF8"] = "1"
 

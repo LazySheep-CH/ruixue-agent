@@ -38,9 +38,7 @@ class Reranker:
     def model(self):
         return self._model if self._model is not None else get_reranker()
 
-    def rerank(
-        self, query: str, candidates: list[tuple[str, str]]
-    ) -> list[tuple[str, float]]:
+    def rerank(self, query: str, candidates: list[tuple[str, str]]) -> list[tuple[str, float]]:
         """candidates: [(chunk_id, 文本), ...] → [(chunk_id, 分数), ...],按分降序。
 
         候选文本用父块正文 —— 与最终交给生成层的粒度一致。
@@ -50,7 +48,7 @@ class Reranker:
         pairs = [(query, text) for _cid, text in candidates]
         scores = self.model.predict(pairs)
         ranked = sorted(
-            ((cid, float(s)) for (cid, _t), s in zip(candidates, scores)),
+            ((cid, float(s)) for (cid, _t), s in zip(candidates, scores, strict=False)),
             key=lambda kv: -kv[1],
         )
         return ranked

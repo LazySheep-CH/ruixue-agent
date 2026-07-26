@@ -23,9 +23,7 @@ def upgrade() -> None:
     op.create_table(
         "term_df",
         sa.Column("term", sa.Text(), nullable=False),
-        sa.Column(
-            "ndoc", sa.Integer(), nullable=False, comment="这个词出现在多少个父块里"
-        ),
+        sa.Column("ndoc", sa.Integer(), nullable=False, comment="这个词出现在多少个父块里"),
         sa.PrimaryKeyConstraint("term"),
         comment="词频表(派生数据,可重建)。BM25 靠它挑出罕见词,只用罕见词查",
     )
