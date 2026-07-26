@@ -47,6 +47,46 @@ def predict_tensile_strength(inputs: dict) -> str:
     return predict_text("TS", inputs)
 
 
+@tool
+def predict_by_location(place: str, days: int, recipe: dict | None = None) -> str:
+    """【推荐】按【地点】预测地膜三大性能:自动查该地土壤+气候,不用用户填环境参数。
+
+    用户只需说地点、用多少天、什么配方,本工具自动补齐环境:
+      土壤(pH/有机质/质地等)← 该县 SoilGrids 数据
+      气候(温度/降水/辐射/UV/湿度)← NASA POWER 该地该时段实况
+    参数:
+      place:  县/区级或市级地名,如"尉犁县""新疆尉犁""南京"
+      days:   地膜使用/埋设天数,如 90
+      recipe: 配方等已知参数,如 {"PLA_pct": 30, "PBAT_pct": 70, "Thickness_um": 10}
+    返回三个性能的预测 + 环境数据来源 + 哪些参数仍用了默认值。
+    """
+    from ruixue_agent.predictors.environment import get_environment
+
+    env = get_environment(place, days)
+    if not env["ok"]:
+        return (
+            f"{env['reason']}。请提供县/区级地名(如「尉犁县」),"
+            "或直接用单项预测工具并自行给出环境参数。"
+        )
+
+    inputs = {**env["features"], "Time_days": days, **(recipe or {})}
+    lines = [
+        f"地点:{env['place']}({env['lon']:.2f}, {env['lat']:.2f}) · 时段 {env['period']}",
+        f"环境数据来源:{env['sources']}",
+        "",
+    ]
+    for name in ["DR", "WVTR", "TS"]:
+        lines.append(predict_text(name, inputs))
+        lines.append("")
+    lines.append("注:环境为该地典型值,微生物等无地理数据源的参数用训练中位数估计,结果供参考。")
+    return "\n".join(lines)
+
+
 def get_predictor_tools() -> list[BaseTool]:
-    """三个性能预测工具。"""
-    return [predict_degradation, predict_water_vapor_rate, predict_tensile_strength]
+    """性能预测工具:三个单项 + 一个按地点自动补齐环境的综合工具。"""
+    return [
+        predict_by_location,
+        predict_degradation,
+        predict_water_vapor_rate,
+        predict_tensile_strength,
+    ]
