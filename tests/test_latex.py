@@ -5,25 +5,18 @@ from ruixue_agent.ingestion.utils.latex import latex_to_text, unwrap_inline_late
 
 def test_chemical_formula():
     assert latex_to_text(r"\mathrm { N H } _ { 3 }") == "NH3"
-    assert (
-        latex_to_text(r"Z _ { \mathrm { n O } } / \mathrm { S i O } _ { 2 }")
-        == "ZnO/SiO2"
-    )
+    assert latex_to_text(r"Z _ { \mathrm { n O } } / \mathrm { S i O } _ { 2 }") == "ZnO/SiO2"
 
 
 def test_units_and_degree():
     assert latex_to_text(r"6 0 ^ { \circ } \mathrm { C }") == "60°C"
     assert latex_to_text(r"6 6 7 ~ \mathrm { m } ^ { 2 }") == "667 m2"  # ~ 是真空格
-    assert (
-        latex_to_text(r"1 0 . 1 2 ~ \mathrm { g \cdot k g ^ { - 1 } }")
-        == "10.12 g·kg-1"
-    )
+    assert latex_to_text(r"1 0 . 1 2 ~ \mathrm { g \cdot k g ^ { - 1 } }") == "10.12 g·kg-1"
 
 
 def test_variables_and_ranges():
     assert (
-        latex_to_text(r"\mathrm { W } 1 { > } \mathrm { W } 2 { > } \mathrm { W } 3")
-        == "W1>W2>W3"
+        latex_to_text(r"\mathrm { W } 1 { > } \mathrm { W } 2 { > } \mathrm { W } 3") == "W1>W2>W3"
     )
     assert latex_to_text(r"\mathrm { B M R } _ { 4 5 }") == "BMR45"
     assert latex_to_text(r"0 \sim 8 0") == "0~80"
@@ -37,9 +30,7 @@ def test_italic_misrecognition_is_fixed():
 def test_unicode_mode():
     assert latex_to_text(r"\mathrm { N H } _ { 3 }", superscript="unicode") == "NH₃"
     assert (
-        latex_to_text(
-            r"1 0 . 1 2 ~ \mathrm { g \cdot k g ^ { - 1 } }", superscript="unicode"
-        )
+        latex_to_text(r"1 0 . 1 2 ~ \mathrm { g \cdot k g ^ { - 1 } }", superscript="unicode")
         == "10.12 g·kg⁻¹"
     )
 

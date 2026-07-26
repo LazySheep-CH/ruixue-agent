@@ -11,7 +11,6 @@ dependencies = [
     "langgraph==1.1.9",
     "pyyaml>=6.0",          # 读 config.yaml
     "python-dotenv>=1.0",   # 从 .env 读 API key
-    "pytest>=8.0",          # 测试（我们要正规地写测试）
     "langchain-deepseek>=1.0.1",
     "sentence-transformers>=5.6.0",
     "pypdf>=6.14.2",
@@ -33,6 +32,38 @@ dependencies = [
     "psycopg-pool>=3.3.1",
     "slowapi>=0.1.10",
 ]
+
+# ── 开发依赖组 ────────────────────────────────────────────────────
+# 只在【开发/CI】需要的工具,不进生产镜像。
+# `uv sync` 默认会装它们(本地/CI 都有);`uv sync --no-dev` 不装(打生产镜像用)。
+[dependency-groups]
+dev = [
+    "pytest>=8.0",          # 测试框架
+    "ruff>=0.10",           # 代码规范检查 + 格式化
+]
+
+# ── ruff:代码规范 & 格式化 ────────────────────────────────────────
+# ruff 是个极快的 Python linter(挑错)+ formatter(排版),一个工具顶过去 black+
+# isort+flake8 一整套。CI 会跑 `ruff check`,不过它就拦下 PR。
+[tool.ruff]
+line-length = 100          # 一行最多 100 字符(超了换行),团队统一,省得为排版吵架
+target-version = "py311"   # 按 Python 3.11 的语法规则检查
+# Alembic 的迁移文件是【工具自动生成】的,不该用我们的规范去卡它。
+extend-exclude = ["**/migrations/**"]
+
+[tool.ruff.lint]
+# 开哪些检查规则(每个字母是一类):
+#   E/W = 代码风格(pycodestyle)   F = 潜在 bug/未用变量(pyflakes)
+#   I   = import 排序(isort)       UP = 用更新的语法写法(pyupgrade)
+#   B   = 常见坑(bugbear,如可变默认参数)
+select = ["E", "W", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# scripts/ 是一次性/手动运维脚本,不是生产代码,放宽:
+#   E402=允许 sys.path 设置后再 import  E501=长行  B007=循环变量没用到
+"scripts/**" = ["E402", "E501", "B007"]
+# 测试:允许长的断言消息;B017=允许 pytest.raises(Exception) 这种宽异常断言
+"tests/**" = ["E501", "B017"]
 
 # ── 让 torch 用上 GPU ────────────────────────────────────────────────
 # 踩过的坑:PyPI 上 Windows 的默认 torch wheel 是【CPU-only 构建】(版本号带 +cpu)。

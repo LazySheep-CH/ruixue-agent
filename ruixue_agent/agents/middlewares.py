@@ -58,23 +58,14 @@ class ToolErrorHandlingMiddleware(AgentMiddleware):
             # 完整详情(含堆栈)只进【服务端日志】,给你排查用。
             # logger.exception 比 logger.error 多带堆栈,能看到错在哪一行。
             logger.exception("工具 %s 失败", name)
-            # ===== (你写)=====
-            # 【安全修补】原来这里写的是 content=f"工具执行失败: {e}" —— 有问题:
-            # e 的文字可能是"connection to host=10.0.1.5 user=admin 认证失败"这种,
-            # 它会进【大模型的上下文】,大模型可能原样复述给用户 = 内部信息泄露。
-            #
-            # 改成只告诉模型【错误类型】(如 ConnectionError),不给具体内容:
-            # type(e).__name__ 取的是异常的类名,只有类型、不含任何细节,安全。
-            # 为什么还要给类型:模型知道是"连不上"还是"参数错",才能回得贴切
-            #(连不上 → "知识库暂时不可用";参数错 → 换个参数重试)。
-            #
-            #   safe_reason = type(e).__name__
-            #   return ToolMessage(
-            #       content=f"工具 {name} 执行失败({safe_reason}),请告知用户该功能暂时不可用,不要编造结果。",
-            #       tool_call_id=request.tool_call["id"],
-            #   )
+            # 【错误脱敏】只把异常【类型名】给模型,不给 str(e) 的具体内容 ——
+            # 原始文字可能含内网 IP、数据库地址等,进了模型上下文可能被复述给用户。
+            # 给类型是为了让模型能贴切回应(连不上 vs 参数错),又不泄露任何细节。
             safe_reason = type(e).__name__
             return ToolMessage(
-                content=f"工具 {name} 执行失败({safe_reason}),请告知用户该功能暂时不可用,不要编造结果。",
+                content=(
+                    f"工具 {name} 执行失败({safe_reason}),"
+                    "请告知用户该功能暂时不可用,不要编造结果。"
+                ),
                 tool_call_id=request.tool_call["id"],
             )

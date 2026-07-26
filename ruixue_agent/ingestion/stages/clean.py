@@ -27,9 +27,7 @@ def clean_text(text: str) -> str:
     """字符串级规范化,步骤见行内注释。"""
     text = unwrap_inline_latex(text)  # 行内 $...$ 公式 → 可读文本(NH3/60°C)
     text = _SUBSUP.sub("", text)  # 去 sub/sup 标签,保留内容
-    text = ftfy.fix_text(
-        text, normalization="NFKC"
-    )  # 修乱码 + 全角转半角(ＰＢＡＴ→PBAT)
+    text = ftfy.fix_text(text, normalization="NFKC")  # 修乱码 + 全角转半角(ＰＢＡＴ→PBAT)
     text = _CONTROL.sub("", text)  # 删控制字符
     text = _SPACES.sub(" ", text)
     text = _BLANKS.sub("\n\n", text)

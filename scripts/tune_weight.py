@@ -115,9 +115,7 @@ def main() -> None:
     for w in weights[::2]:  # 隔一个打,省版面
         m = grid[w]
         star = "  ←最高R@3" if w == best_full else ""
-        print(
-            f"   {w:>6} {m['r1']:>7.3f} {m['r3']:>7.3f} {m['r10']:>7.3f} {m['mrr']:>7.3f}{star}"
-        )
+        print(f"   {w:>6} {m['r1']:>7.3f} {m['r3']:>7.3f} {m['r10']:>7.3f} {m['mrr']:>7.3f}{star}")
 
     # ── ③ 5 折交叉验证(每折在没见过的题上验证)──
     print("\n③ 5 折交叉验证 —— 每折选出的最优权重,看它们稳不稳")
@@ -165,9 +163,7 @@ def main() -> None:
     print(
         f"     R@3  提升 [{lo3:+.3f}, {hi3:+.3f}]   {'✓ 显著(区间不含0)' if lo3 > 0 else '✗ 不显著(区间含0)'}"
     )
-    print(
-        f"     MRR  提升 [{lom:+.3f}, {him:+.3f}]   {'✓ 显著' if lom > 0 else '✗ 不显著'}"
-    )
+    print(f"     MRR  提升 [{lom:+.3f}, {him:+.3f}]   {'✓ 显著' if lom > 0 else '✗ 不显著'}")
 
     print(f"\n{'═' * 60}")
     print("结论要点:")

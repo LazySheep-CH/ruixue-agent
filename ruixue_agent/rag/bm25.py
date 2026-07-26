@@ -67,9 +67,7 @@ class Bm25Search:
     def _rare_terms_query(self, query: str) -> str:
         """挑出罕见词,拼成 tsquery 的 OR 表达式。"""
         tokens = list(
-            dict.fromkeys(
-                t for t in tokenize(query).split() if t not in _STOP and len(t) > 1
-            )
+            dict.fromkeys(t for t in tokenize(query).split() if t not in _STOP and len(t) > 1)
         )
         if not tokens:
             return ""
