@@ -51,25 +51,30 @@ class ToolErrorHandlingMiddleware(AgentMiddleware):
     """
 
     def wrap_tool_call(self, request, handler):
-        # ============================================================
-        #   (你写函数体):
-        #   1. try: 正常执行并返回
-        #          return handler(request)
-        #   2. except Exception as e:  兜住工具抛出的任何异常
-        #        a. 记 ERROR 日志(注意用 logger.error,级别比 info 高):
-        #           logger.error("工具 %s 失败: %s", request.tool_call["name"], e)
-        #        b. 返回一条错误 ToolMessage,让 agent 知道工具挂了、能优雅回应。
-        #           ToolMessage 必须带 tool_call_id(对应哪次调用),从 request 取:
-        #           return ToolMessage(
-        #               content=f"工具执行失败: {e}",
-        #               tool_call_id=request.tool_call["id"],
-        #           )
-        # ============================================================
         try:
             return handler(request)
         except Exception as e:
-            logger.error("工具 %s 失败: %s", request.tool_call["name"], e)
+            name = request.tool_call["name"]
+            # 完整详情(含堆栈)只进【服务端日志】,给你排查用。
+            # logger.exception 比 logger.error 多带堆栈,能看到错在哪一行。
+            logger.exception("工具 %s 失败", name)
+            # ===== (你写)=====
+            # 【安全修补】原来这里写的是 content=f"工具执行失败: {e}" —— 有问题:
+            # e 的文字可能是"connection to host=10.0.1.5 user=admin 认证失败"这种,
+            # 它会进【大模型的上下文】,大模型可能原样复述给用户 = 内部信息泄露。
+            #
+            # 改成只告诉模型【错误类型】(如 ConnectionError),不给具体内容:
+            # type(e).__name__ 取的是异常的类名,只有类型、不含任何细节,安全。
+            # 为什么还要给类型:模型知道是"连不上"还是"参数错",才能回得贴切
+            #(连不上 → "知识库暂时不可用";参数错 → 换个参数重试)。
+            #
+            #   safe_reason = type(e).__name__
+            #   return ToolMessage(
+            #       content=f"工具 {name} 执行失败({safe_reason}),请告知用户该功能暂时不可用,不要编造结果。",
+            #       tool_call_id=request.tool_call["id"],
+            #   )
+            safe_reason = type(e).__name__
             return ToolMessage(
-                content=f"工具执行失败: {e}",
+                content=f"工具 {name} 执行失败({safe_reason}),请告知用户该功能暂时不可用,不要编造结果。",
                 tool_call_id=request.tool_call["id"],
             )
