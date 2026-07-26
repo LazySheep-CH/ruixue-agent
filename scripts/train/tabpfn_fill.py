@@ -18,7 +18,7 @@ import pandas as pd
 from sklearn.experimental import enable_iterative_imputer  # noqa: F401
 from sklearn.impute import IterativeImputer
 
-from ruixue_agent.predictors.schema import MODELS
+from ruixue_agent.predictors.schema import CATEGORICAL_DOMAINS, MODELS
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -55,9 +55,15 @@ def main(name: str) -> None:
         ),
         columns=cols,
     )
+    # 分类变量修正:填充器当连续量填出了小数(如 Color=2.4),四舍五入回整数 + 裁剪合法域。
+    for col in cfg["categorical"]:
+        if col in filled.columns and col in CATEGORICAL_DOMAINS:
+            lo, hi = CATEGORICAL_DOMAINS[col]
+            filled[col] = filled[col].round().clip(lo, hi).astype(int)
+
     out = ROOT / "data" / "predictors" / f"{name}_tabpfn_filled.csv"
     filled.to_csv(out, index=False)
-    print(f"  完成 {time.time() - t:.0f}s → {out.name}")
+    print(f"  完成 {time.time() - t:.0f}s → {out.name}(分类列已修正为整数)")
 
 
 if __name__ == "__main__":
