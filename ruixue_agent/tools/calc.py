@@ -44,7 +44,10 @@ def estimate_film_usage(
     if area_mu <= 0.0 or thickness_mm <= 0.0:
         raise ValueError("请输入正确的地膜面积和厚度")
     film_usage = COVERAGE_COEFFICIENT[film_type] * thickness_mm * area_mu
-    return f"面积为{area_mu}亩的种植区域下，{thickness_mm}毫米的{film_type}地膜，总用量需要{film_usage:.1f}公斤"
+    return (
+        f"面积为{area_mu}亩的种植区域下，{thickness_mm}毫米的{film_type}地膜，"
+        f"总用量需要{film_usage:.1f}公斤"
+    )
 
 
 if __name__ == "__main__":

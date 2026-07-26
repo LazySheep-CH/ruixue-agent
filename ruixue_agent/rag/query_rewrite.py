@@ -51,9 +51,7 @@ class QueryRewriter:
     def is_colloquial(self, query: str) -> bool:
         """闸门:判查询是否口语。异常/不确定回退 False(从严,不乱改)。"""
         try:
-            out = self.llm.invoke(
-                [("system", _GATE_SYS), ("user", query)]
-            ).content.strip()
+            out = self.llm.invoke([("system", _GATE_SYS), ("user", query)]).content.strip()
             return "口语" in out and "规范" not in out
         except Exception:
             return False

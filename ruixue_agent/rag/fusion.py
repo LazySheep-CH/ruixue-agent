@@ -35,9 +35,7 @@ def rrf(
     if weights is None:
         weights = [1.0] * len(rankings)
     if len(weights) != len(rankings):
-        raise ValueError(
-            f"weights 有 {len(weights)} 个,但 rankings 有 {len(rankings)} 路"
-        )
+        raise ValueError(f"weights 有 {len(weights)} 个,但 rankings 有 {len(rankings)} 路")
 
     fused: dict[str, float] = {}
     for ranking, w in zip(rankings, weights, strict=True):

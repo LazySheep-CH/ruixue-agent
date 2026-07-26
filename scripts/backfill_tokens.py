@@ -47,9 +47,7 @@ def main() -> None:
         print("--redo:已清空 text_tokens,全部重算")
 
     with engine.connect() as conn:
-        todo = conn.execute(
-            text("SELECT count(*) FROM chunks WHERE text_tokens IS NULL")
-        ).scalar()
+        todo = conn.execute(text("SELECT count(*) FROM chunks WHERE text_tokens IS NULL")).scalar()
     print(f"待分词 {todo:,} 块")
     if not todo:
         print("没有要做的。")
@@ -93,9 +91,7 @@ def main() -> None:
             text("SELECT count(*) FROM chunks WHERE text_tokens IS NOT NULL")
         ).scalar()
         n_tsv = conn.execute(
-            text(
-                "SELECT count(*) FROM chunks WHERE text_tsv IS NOT NULL AND text_tsv != ''"
-            )
+            text("SELECT count(*) FROM chunks WHERE text_tsv IS NOT NULL AND text_tsv != ''")
         ).scalar()
         print(f"  有分词的: {n_tok:,}")
         print(f"  有 tsv 的: {n_tsv:,}   ← 该和上面一样(触发器自动生成的)")

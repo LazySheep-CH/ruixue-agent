@@ -24,7 +24,5 @@ question = sys.argv[1] if len(sys.argv) > 1 else "你好"
 agent = create_ruixue_agent()
 config = {"configurable": {"thread_id": "persist-demo"}}  # 固定会话ID,两次运行共用
 
-result = agent.invoke(
-    {"messages": [{"role": "user", "content": question}]}, config=config
-)
+result = agent.invoke({"messages": [{"role": "user", "content": question}]}, config=config)
 print(f"\n问: {question}\n答: {result['messages'][-1].content}")

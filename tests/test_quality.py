@@ -1,7 +1,7 @@
 """quality 门禁测试:好文档过、空文档拦、正文硬门槛。"""
 
-from ruixue_agent.ingestion.stages.quality import assess_quality
 from ruixue_agent.ingestion.schema import Document, Element
+from ruixue_agent.ingestion.stages.quality import assess_quality
 
 
 def _doc(elements, meta=None):
@@ -35,8 +35,6 @@ def test_empty_doc_rejected():
 
 def test_body_is_hard_gate():
     # 有标题有年份,但正文太短 → 仍不过(has_body 一票否决)
-    doc = _doc(
-        [Element(type="paragraph", text="短", page=0)], {"title": "T", "year": 2024}
-    )
+    doc = _doc([Element(type="paragraph", text="短", page=0)], {"title": "T", "year": 2024})
     r = assess_quality(doc)
     assert not r["passed"]

@@ -25,12 +25,8 @@ def test_extract_metadata_v2():
                 text="摘 要 研究PBAT可降解地膜在新疆棉区的降解特性",
                 page=0,
             ),
-            Element(
-                type="paragraph", text="关键词 PBAT;可降解地膜;棉花;降解特性", page=0
-            ),
-            Element(
-                type="paragraph", text="文章编号(2024)01 DOI:10.1234/abc.2024", page=0
-            ),
+            Element(type="paragraph", text="关键词 PBAT;可降解地膜;棉花;降解特性", page=0),
+            Element(type="paragraph", text="文章编号(2024)01 DOI:10.1234/abc.2024", page=0),
         ]
     )
     extract_metadata(doc)

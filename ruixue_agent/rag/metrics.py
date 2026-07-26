@@ -43,7 +43,7 @@ def ndcg_at_k(ranked_ids: list[str], rel_map: Mapping[str, int], k: int) -> floa
         for i, cid in enumerate(ranked_ids[:k], start=1)
     )
     ideal = sorted(rel_map.values(), reverse=True)[:k]
-    idcg = sum((2 ** rel - 1) / math.log2(i + 1) for i, rel in enumerate(ideal, start=1))
+    idcg = sum((2**rel - 1) / math.log2(i + 1) for i, rel in enumerate(ideal, start=1))
     return dcg / idcg if idcg > 0 else 0.0
 
 
@@ -60,8 +60,7 @@ def evaluate(
     if not results:
         return {}
     out = {
-        f"recall@{k}": sum(recall_at_k(r[0], r[1], k) for r in results) / len(results)
-        for k in ks
+        f"recall@{k}": sum(recall_at_k(r[0], r[1], k) for r in results) / len(results) for k in ks
     }
     out["mrr"] = sum(reciprocal_rank(r[0], r[1]) for r in results) / len(results)
     out["n"] = len(results)

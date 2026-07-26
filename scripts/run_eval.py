@@ -49,12 +49,18 @@ def run(retriever, qs):
 
 def _print(tag, m, per, na, dt):
     print(f"── {tag} ──(有答案 {m['n']} 题)")
-    print(f"  R@1 {m['recall@1']:.3f}  R@3 {m['recall@3']:.3f}  R@5 {m['recall@5']:.3f}"
-          f"  R@10 {m['recall@10']:.3f}  MRR {m['mrr']:.3f}  ({dt:.0f}ms/题)")
-    print("  分策略 R@3:  " + "  ".join(
-        f"{s} {per.get(s, {}).get('recall@3', 0):.3f}" for s in ("fact", "user", "multihop")))
+    print(
+        f"  R@1 {m['recall@1']:.3f}  R@3 {m['recall@3']:.3f}  R@5 {m['recall@5']:.3f}"
+        f"  R@10 {m['recall@10']:.3f}  MRR {m['mrr']:.3f}  ({dt:.0f}ms/题)"
+    )
+    print(
+        "  分策略 R@3:  "
+        + "  ".join(
+            f"{s} {per.get(s, {}).get('recall@3', 0):.3f}" for s in ("fact", "user", "multihop")
+        )
+    )
     if na[1]:
-        print(f"  拒答:检索永返回结果,拒答是生成层职责(见优化记录),此处不计入 Recall")
+        print("  拒答:检索永返回结果,拒答是生成层职责(见优化记录),此处不计入 Recall")
 
 
 def main():
@@ -76,10 +82,12 @@ def main():
         rewriter = None
         if args.rewrite:
             from ruixue_agent.rag.query_rewrite import QueryRewriter
+
             rewriter = QueryRewriter()
 
         if args.ab:
             from ruixue_agent.rag.rerank import Reranker
+
             rr = Reranker()
             configs = [
                 ("纯向量", Retriever(store, repo, rewriter=rewriter)),
@@ -88,8 +96,11 @@ def main():
             ]
         else:
             from ruixue_agent.rag.rerank import Reranker
+
             tag = "上线管线(向量+BM25+rerank" + ("+改写)" if rewriter else ")")
-            configs = [(tag, Retriever(store, repo, bm25=bm25, reranker=Reranker(), rewriter=rewriter))]
+            configs = [
+                (tag, Retriever(store, repo, bm25=bm25, reranker=Reranker(), rewriter=rewriter))
+            ]
 
         configs[0][1].search("预热", k=1)
         for tag, r in configs:
