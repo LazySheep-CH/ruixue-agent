@@ -67,12 +67,21 @@ def append_batch(items: list[tuple]) -> None:
                 {"c": ids[0]},
             ).first()
             assert row, f"块不存在: {ids[0]}"
-            existing.append({
-                "question": q, "strategy": strat, "persona": persona,
-                "primary_gold": ids[0], "gold_chunk_ids": ids, "has_answer": True,
-                "gold_text": row[0][:200], "section_path": row[1],
-                "title": row[2], "source": row[3], "author": "claude",
-            })
+            existing.append(
+                {
+                    "question": q,
+                    "strategy": strat,
+                    "persona": persona,
+                    "primary_gold": ids[0],
+                    "gold_chunk_ids": ids,
+                    "has_answer": True,
+                    "gold_text": row[0][:200],
+                    "section_path": row[1],
+                    "title": row[2],
+                    "source": row[3],
+                    "author": "claude",
+                }
+            )
             seen_q.add(q)
             added += 1
     _save(existing)
@@ -87,11 +96,17 @@ def append_noans(items: list[tuple]) -> None:
     for persona, q in items:
         if q in seen_q:
             continue
-        existing.append({
-            "question": q, "strategy": "noans", "persona": persona,
-            "primary_gold": None, "gold_chunk_ids": [], "has_answer": False,
-            "author": "claude",
-        })
+        existing.append(
+            {
+                "question": q,
+                "strategy": "noans",
+                "persona": persona,
+                "primary_gold": None,
+                "gold_chunk_ids": [],
+                "has_answer": False,
+                "author": "claude",
+            }
+        )
         seen_q.add(q)
         added += 1
     _save(existing)

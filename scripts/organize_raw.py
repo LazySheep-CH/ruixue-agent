@@ -27,9 +27,7 @@ def _ext(p: Path) -> str:
     return "\\\\?\\" + str(p)
 
 
-SRC = Path(
-    r"D:/LLM_RuiXue/RuiXue-Intelligent-Mulch-System/storage/data/raw/literature/mulch-pdf"
-)
+SRC = Path(r"D:/LLM_RuiXue/RuiXue-Intelligent-Mulch-System/storage/data/raw/literature/mulch-pdf")
 DST = Path(__file__).resolve().parent.parent / "data" / "raw"
 MANIFEST = DST / "raw_manifest.jsonl"
 
@@ -122,9 +120,7 @@ def detect_lang(path: Path, pages: int = 3) -> str:
 
 def reclassify_language() -> None:
     """对已复制的 literature 文件按内容判语言,把英文的移到 data/raw/non_chinese/,重写清单。"""
-    rows = [
-        json.loads(line) for line in MANIFEST.read_text(encoding="utf-8").splitlines()
-    ]
+    rows = [json.loads(line) for line in MANIFEST.read_text(encoding="utf-8").splitlines()]
     moved = 0
     for r in rows:
         if r["category"] != "literature":
@@ -142,9 +138,7 @@ def reclassify_language() -> None:
         for r in rows:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
     zh = sum(1 for r in rows if r["category"] == "literature")
-    print(
-        f"语言过滤完成:英文 {moved} 篇 → data/raw/non_chinese/;中文论文剩 {zh} 篇。清单已更新。"
-    )
+    print(f"语言过滤完成:英文 {moved} 篇 → data/raw/non_chinese/;中文论文剩 {zh} 篇。清单已更新。")
 
 
 def sha256_of(path: Path) -> str:

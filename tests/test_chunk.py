@@ -1,7 +1,7 @@
 """chunk 层测试:章节路径栈算法(嵌套 + 同级弹栈)+ 父子分块。"""
 
-from ruixue_agent.ingestion.stages.chunk import _section_paths, chunk_document
 from ruixue_agent.ingestion.schema import Document, Element
+from ruixue_agent.ingestion.stages.chunk import _section_paths, chunk_document
 
 
 def _el(type_, text, level=None):
@@ -76,12 +76,8 @@ def _doc(elements):
 
 def test_long_paragraph_is_split():
     """长段落必须切开,否则 embedding 会悄悄截断、尾巴检索不到。"""
-    long_text = (
-        "生物降解地膜覆盖后地温提高显著,棉花出苗率提升明显。" * 30
-    )  # 远超 400 字
-    chunks = chunk_document(
-        _doc([_el("heading", "2 结果", 2), _el("paragraph", long_text)])
-    )
+    long_text = "生物降解地膜覆盖后地温提高显著,棉花出苗率提升明显。" * 30  # 远超 400 字
+    chunks = chunk_document(_doc([_el("heading", "2 结果", 2), _el("paragraph", long_text)]))
     children = [c for c in chunks if c.parent_id]
     assert len(children) > 1  # 被切成多段
     assert all(len(c.text) <= 400 for c in children)  # 每段都不超长
@@ -133,11 +129,7 @@ def test_table_becomes_row_sentences():
     )
     el = _el("table", html)
     el.meta["caption"] = "表1 三种试样成分比较"
-    kids = [
-        c.text
-        for c in chunk_document(_doc([_el("heading", "3 表", 2), el]))
-        if c.parent_id
-    ]
+    kids = [c.text for c in chunk_document(_doc([_el("heading", "3 表", 2), el])) if c.parent_id]
 
     assert len(kids) == 2  # 两个数据行 → 两句
     assert kids[0] == "表:表1 三种试样成分比较。全杆:纤维素 31.16,灰分 2.4。"

@@ -1,5 +1,7 @@
 import importlib
+
 from langchain_core.language_models import BaseChatModel
+
 from ruixue_agent.config import load_config
 
 # 调 DeepSeek 多久还没回,就认定它挂了、主动放弃(秒)。

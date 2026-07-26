@@ -14,9 +14,7 @@ _MAX_GARBLE = 0.02  # 乱码率上限
 
 def _body_len(doc: Document) -> int:
     """正文总字数(标题/段落/列表)。"""
-    return sum(
-        len(e.text) for e in doc.elements if e.type in ("heading", "paragraph", "list")
-    )
+    return sum(len(e.text) for e in doc.elements if e.type in ("heading", "paragraph", "list"))
 
 
 def _garble_ratio(doc: Document) -> float:

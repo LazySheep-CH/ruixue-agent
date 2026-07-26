@@ -92,7 +92,7 @@ def _group_into_sections(elements: list, paths: list[list[str]]) -> list[tuple]:
     sections: list[tuple] = []
     current_path = None
     current_els: list = []
-    for el, path in zip(elements, paths):
+    for el, path in zip(elements, paths, strict=False):
         if el.type == "heading" or not el.text.strip():
             continue
         if path != current_path:  # 换节:上一节收尾

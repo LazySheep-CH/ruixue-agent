@@ -143,15 +143,19 @@ def main():
         q["gold_chunk_ids"] = sorted([c for c, g in r.items() if g >= 2])
         if q.get("primary_gold") and q["primary_gold"] not in q["gold_chunk_ids"]:
             q["gold_chunk_ids"].append(q["primary_gold"])  # 保底
-    EVAL.write_text("\n".join(json.dumps(q, ensure_ascii=False) for q in qs) + "\n", encoding="utf-8")
+    EVAL.write_text(
+        "\n".join(json.dumps(q, ensure_ascii=False) for q in qs) + "\n", encoding="utf-8"
+    )
 
     # ④ 质量检查
     ng = [len(q["gold_chunk_ids"]) for q in ans]
     print(f"{'═' * 60}\n质量检查\n{'═' * 60}")
     print(f"  每题 gold 数(rel≥2):平均 {sum(ng) / len(ng):.2f},最多 {max(ng)}")
     print(f"  分布:{dict(sorted(Counter(ng).items()))}")
-    print(f"  只有 1 个 gold 的题:{sum(1 for x in ng if x == 1)}/{len(ans)}"
-          f"(比例越低,说明单标注低估越严重)")
+    print(
+        f"  只有 1 个 gold 的题:{sum(1 for x in ng if x == 1)}/{len(ans)}"
+        f"(比例越低,说明单标注低估越严重)"
+    )
     by = {}
     for q in ans:
         by.setdefault(q["strategy"], []).append(len(q["gold_chunk_ids"]))
@@ -159,7 +163,11 @@ def main():
     for s, v in by.items():
         print(f"    {s:9} {sum(v) / len(v):.2f}")
     # 抽查:primary_gold 都在 gold 里(保底)
-    miss = [q["question"] for q in ans if q.get("primary_gold") and q["primary_gold"] not in q["gold_chunk_ids"]]
+    miss = [
+        q["question"]
+        for q in ans
+        if q.get("primary_gold") and q["primary_gold"] not in q["gold_chunk_ids"]
+    ]
     print(f"  primary_gold 保底检查:{'✓ 全部在 gold 内' if not miss else f'✗ {len(miss)} 题缺失'}")
     print(f"\n→ 已写回 {EVAL}")
 

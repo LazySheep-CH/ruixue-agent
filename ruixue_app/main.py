@@ -18,8 +18,10 @@ from slowapi.util import get_remote_address
 
 from ruixue_agent.agents import create_ruixue_agent
 from ruixue_app.auth import get_current_user
+from ruixue_app.observability import RequestIdMiddleware, configure_logging
 
-logging.basicConfig(level=logging.INFO)
+# 用带 request_id 的结构化日志格式,替代默认的 logging.basicConfig。
+configure_logging()
 
 # agent 先占位;真正在服务【启动】时才建(见下面的 lifespan)。
 _agent = None
@@ -45,6 +47,10 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="瑞雪地膜智能助手", lifespan=lifespan)
+
+# 请求追踪:每个请求发一个 request_id,贯穿日志、回写响应头。
+# 这是【HTTP 层】的中间件(套在整个请求外),和 agent 里的中间件是同一思想、不同层。
+app.add_middleware(RequestIdMiddleware)
 
 
 # ── 限流(Rate Limiting)────────────────────────────────────────
@@ -80,15 +86,47 @@ async def _handle_unexpected(request: Request, exc: Exception) -> JSONResponse:
     # 2. 给用户返回脱敏的通用错误(注意:content 里【绝不能】放 exc 的内容!):
     #      return JSONResponse(status_code=500, content={"detail": "服务器内部错误，请稍后重试"})
     logger.exception("未处理异常: %s", exc)
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "服务器内部错误，请稍后重试"}
-    )
+    return JSONResponse(status_code=500, content={"detail": "服务器内部错误，请稍后重试"})
+
+
+# ── 健康检查(可运维)──────────────────────────────────────────
+# 两种探针,别混:
+#   存活 /health       = "进程还活着吗" —— 挂了就重启它。故意【不查】数据库。
+#   就绪 /health/ready = "能真正干活吗" —— 依赖(数据库)连不上时,虽活着但不该接流量。
+# 负载均衡 / K8s 靠这两个探针决定:要不要重启、要不要把流量切走。
+@app.get("/health")
+def health():
+    """存活探针:只证明进程能响应,不碰任何外部依赖。"""
+    return {"status": "ok"}
+
+
+@app.get("/health/ready")
+def health_ready():
+    """就绪探针:数据库连得上才算 ready;连不上 -> 503,让上游把流量切走。"""
+    from sqlalchemy import text
+
+    from ruixue_agent.persistence.engine import get_engine
+
+    try:
+        # ===== (你写)=====
+        # 跑一句最轻的查询证明数据库是通的,通了就回 ready:
+        #   with get_engine().connect() as conn:
+        #       conn.execute(text("SELECT 1"))
+        #   return {"status": "ready"}
+        with get_engine().connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return {"status": "ready"}
+    except Exception:
+        # 连不上不是"服务器 bug",是"暂时没准备好" -> 用 503(Service Unavailable),
+        # 不是 500。完整原因进日志,响应只给一个状态词。
+        logger.exception("就绪检查失败:数据库连不上")
+        return JSONResponse(status_code=503, content={"status": "not_ready"})
 
 
 # ── 请求 / 响应模型 ────────────────────────────────────────────
 class ChatRequest(BaseModel):
     """客户端 POST 过来的 JSON。"""
+
     # ===== (你写)=====
     # 给两个字段加【长度上限】(Field 声明"这个字段最长多少",防超长输入烧 token)。
     # 把下面两行改成:
@@ -100,6 +138,7 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     """返回给客户端的 JSON。"""
+
     answer: str
 
 
@@ -113,9 +152,7 @@ def chat(
 ) -> ChatResponse:
     thread_id = f"{user_id}:{req.thread_id}"  # 命名空间隔离:用户只能碰自己的对话
     config = {"configurable": {"thread_id": thread_id}}
-    result = _agent.invoke(
-        {"messages": [{"role": "user", "content": req.message}]}, config=config
-    )
+    result = _agent.invoke({"messages": [{"role": "user", "content": req.message}]}, config=config)
     return ChatResponse(answer=result["messages"][-1].content)
 
 
@@ -131,15 +168,18 @@ def chat_stream(
     config = {"configurable": {"thread_id": thread_id}}
 
     def event_generator():
-        for chunk, meta in _agent.stream(
+        # _meta 用不到,用下划线开头表示"我知道它在,但故意不用"(避免 lint 报未用变量)
+        for chunk, _meta in _agent.stream(
             {"messages": [{"role": "user", "content": req.message}]},
             config=config,
             stream_mode="messages",
         ):
             reasoning = chunk.additional_kwargs.get("reasoning_content")
             if reasoning:
-                yield f"data: {json.dumps({'type': 'thinking', 'text': reasoning}, ensure_ascii=False)}\n\n"
+                payload = json.dumps({"type": "thinking", "text": reasoning}, ensure_ascii=False)
+                yield f"data: {payload}\n\n"
             if chunk.content:
-                yield f"data: {json.dumps({'type': 'answer', 'text': chunk.content}, ensure_ascii=False)}\n\n"
+                payload = json.dumps({"type": "answer", "text": chunk.content}, ensure_ascii=False)
+                yield f"data: {payload}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")

@@ -1,4 +1,5 @@
 import pytest
+
 from ruixue_agent.models import create_model
 
 

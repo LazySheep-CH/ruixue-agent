@@ -118,9 +118,7 @@ class TermDfRow(Base):
     __tablename__ = "term_df"
 
     term: Mapped[str] = mapped_column(Text, primary_key=True)
-    ndoc: Mapped[int] = mapped_column(
-        Integer, nullable=False, comment="这个词出现在多少个父块里"
-    )
+    ndoc: Mapped[int] = mapped_column(Integer, nullable=False, comment="这个词出现在多少个父块里")
 
     __table_args__ = (
         Index("idx_term_df_ndoc", "ndoc"),

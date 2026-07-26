@@ -57,9 +57,7 @@ def load_chunks(document_id: str, folder: Path = CHUNKS) -> list[Chunk] | None:
     path = folder / f"{document_id}.json"
     if not path.exists():
         return None
-    return [
-        Chunk.model_validate(o) for o in json.loads(path.read_text(encoding="utf-8"))
-    ]
+    return [Chunk.model_validate(o) for o in json.loads(path.read_text(encoding="utf-8"))]
 
 
 def is_parsed(document_id: str) -> bool:

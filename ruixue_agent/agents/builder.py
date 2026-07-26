@@ -71,9 +71,7 @@ def create_ruixue_agent(
             # ③ 模型调用重试:网络抖动、对方 503 —— 退避后重试,别让用户白跑一趟。
             #    jitter=True 是"随机抖动":避免所有失败请求在同一刻一起重试,
             #    那样等于自己给对方来一波脉冲(惊群),越重试越挂。
-            ModelRetryMiddleware(
-                max_retries=2, initial_delay=1.0, backoff_factor=2.0, jitter=True
-            ),
+            ModelRetryMiddleware(max_retries=2, initial_delay=1.0, backoff_factor=2.0, jitter=True),
             # ④ 工具计时:放在错误处理【外层】,这样失败的调用也能被记进耗时日志。
             TimingLoggingMiddleware(),
             # ⑤ 工具错误降级:最内层,离真正的工具执行最近,第一时间接住异常。
