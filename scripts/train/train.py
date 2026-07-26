@@ -42,6 +42,7 @@ from ruixue_agent.predictors.schema import MODELS
 ROOT = Path(__file__).resolve().parents[2]
 SEED = 42
 N_SPLITS = 5
+TARGET_UNITS = {"DR": "%", "WVTR": "g/m²·d", "TS": "MPa"}  # 各模型目标的单位
 
 
 def sha256(p: Path) -> str:
@@ -173,6 +174,7 @@ def main(name: str) -> None:
     if tabpfn_filled.exists():
         # 首选:TabPFN 填充数据(实测最强填充器,RMSE 比 KNN 低约40%)。已清洗+填满。
         print(f"═══ 训练 {name}  (TabPFN 填充数据 {tabpfn_filled.name}) ═══")
+        data_file = tabpfn_filled  # 修复:两个分支都要定义,否则写模型卡时 data_file 未定义
         df = pd.read_csv(tabpfn_filled)
         report = {"source": tabpfn_filled.name, "rows": len(df), "fill": "TabPFN"}
         disclosure = {
@@ -249,12 +251,15 @@ def main(name: str) -> None:
         "algorithm": best_name,
         "impute": cfg["impute"],
         "feature_order": cfg["features"],
+        "target_unit": TARGET_UNITS[name],
+        # 各特征默认值(训练数据中位数)—— 服务端用户没给的环境/土壤参数用它兜底。
+        "feature_medians": {k: round(float(v), 4) for k, v in X.median().items()},
         "metrics": {**results[best_name], "cv_folds": N_SPLITS},
         "disclosure": disclosure,  # 目标填充披露(透明);无则 None
         "benchmark": results,
         "paper_r2_single_split": cfg["paper_r2"],
         "data": {
-            "file": f"data/predictors/{cfg['data']}",
+            "file": data_file.name,
             "sha256": sha256(data_file),
             "n_rows": len(X),
             "clean_report": report,
