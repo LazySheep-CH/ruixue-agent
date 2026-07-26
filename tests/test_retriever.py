@@ -37,9 +37,7 @@ class FakeStore:
 class FakeRow:
     """假的 ChunkRow —— 只带 Retriever 会用到的字段。"""
 
-    def __init__(
-        self, chunk_id, text, parent_id=None, section_path=None, document_id="d1"
-    ):
+    def __init__(self, chunk_id, text, parent_id=None, section_path=None, document_id="d1"):
         self.chunk_id = chunk_id
         self.text = text
         self.parent_id = parent_id
@@ -71,12 +69,8 @@ def rows():
         "P1": FakeRow("P1", "1.1 主要原料。PBAT 牌号 TH801T,蓝山屯河。密度 1.26。"),
         "P1_c0": FakeRow("P1_c0", "PBAT 牌号 TH801T,蓝山屯河。", parent_id="P1"),
         "P1_c1": FakeRow("P1_c1", "密度 1.26。", parent_id="P1"),
-        "P2": FakeRow(
-            "P2", "2.1 测试方法。按 GB/T 1040 测拉伸强度。", document_id="d2"
-        ),
-        "P2_c0": FakeRow(
-            "P2_c0", "按 GB/T 1040 测拉伸强度。", parent_id="P2", document_id="d2"
-        ),
+        "P2": FakeRow("P2", "2.1 测试方法。按 GB/T 1040 测拉伸强度。", document_id="d2"),
+        "P2_c0": FakeRow("P2_c0", "按 GB/T 1040 测拉伸强度。", parent_id="P2", document_id="d2"),
     }
 
 
@@ -94,9 +88,7 @@ def test_returns_parent_text_not_child_text(rows):
 
     assert len(got) == 1
     assert got[0].chunk_id == "P1"  # 父块
-    assert (
-        "密度 1.26" in got[0].text
-    )  # 父块含子块没有的上下文 ← 这就是 Small-to-Big 的收益
+    assert "密度 1.26" in got[0].text  # 父块含子块没有的上下文 ← 这就是 Small-to-Big 的收益
 
 
 def test_dedups_parents(rows):

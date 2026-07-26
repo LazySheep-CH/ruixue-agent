@@ -1,12 +1,12 @@
 """落盘测试:存 → 读 → 内容一模一样(往返无损),不存在时返回 None。"""
 
-from ruixue_agent.ingestion.schema import Chunk, Document, Element
 from ruixue_agent.ingestion.cache import (
     load_chunks,
     load_document,
     save_chunks,
     save_document,
 )
+from ruixue_agent.ingestion.schema import Chunk, Document, Element
 
 
 def _doc():
@@ -19,9 +19,7 @@ def _doc():
         parser="mineru",
         elements=[
             Element(type="heading", text="1 实验部分", page=0, level=2),
-            Element(
-                type="formula", text=r"$$E=mc^2$$", page=2, meta={"latex": r"E=mc^2"}
-            ),
+            Element(type="formula", text=r"$$E=mc^2$$", page=2, meta={"latex": r"E=mc^2"}),
             Element(
                 type="table",
                 text="<table><tr><td>PBAT</td></tr></table>",

@@ -11,12 +11,11 @@ import time
 from collections import Counter
 from pathlib import Path
 
-
+from ruixue_agent.ingestion.cache import FAILED, save_chunks, save_document
 from ruixue_agent.ingestion.parsers.mineru_parser import (
     UNKNOWN_TYPES,
     parse_content_list,
 )
-from ruixue_agent.ingestion.cache import FAILED, save_chunks, save_document
 from ruixue_agent.ingestion.stages.chunk import chunk_document
 from ruixue_agent.ingestion.stages.clean import clean_document
 from ruixue_agent.ingestion.stages.dedup import dedup_documents
@@ -50,11 +49,7 @@ def main() -> None:
             if not row:  # 已排除的 or 不在账上
                 continue
             p = next(
-                (
-                    x
-                    for x in doc_dir.glob("*/*_content_list.json")
-                    if "v2" not in x.name
-                ),
+                (x for x in doc_dir.glob("*/*_content_list.json") if "v2" not in x.name),
                 None,
             )
             if not p:
@@ -71,10 +66,7 @@ def main() -> None:
             )
             clean_document(doc)
             docs.append(doc)
-    print(
-        f"   解析 {len(docs)} 篇 ({time.time() - t0:.0f}s)"
-        + (f",缺输出 {miss}" if miss else "")
-    )
+    print(f"   解析 {len(docs)} 篇 ({time.time() - t0:.0f}s)" + (f",缺输出 {miss}" if miss else ""))
 
     # ── 阶段2:dedup(跨文档,要看全集)──
     t = time.time()
@@ -109,9 +101,7 @@ def main() -> None:
         total_chunks += len(chunks)
         n_parent += sum(1 for c in chunks if c.parent_id is None)
         n_child += sum(1 for c in chunks if c.parent_id)
-    print(
-        f"   {total_chunks} chunk(父{n_parent} + 子{n_child}) ({time.time() - t:.0f}s)"
-    )
+    print(f"   {total_chunks} chunk(父{n_parent} + 子{n_child}) ({time.time() - t:.0f}s)")
 
     # ── 对账 + 统计 ──
     print(f"\n{'═' * 66}\n对账")
@@ -122,12 +112,10 @@ def main() -> None:
     print(f"  = 入库                : {len(passed)}")
     print(f"  产出 chunk            : {total_chunks}(子块 {n_child} 个要 embedding)")
 
-    print("\n元数据覆盖率(入库的 {} 篇)".format(len(passed)))
+    print(f"\n元数据覆盖率(入库的 {len(passed)} 篇)")
     for k in ("title", "year", "doi", "keywords", "abstract"):
         got = sum(1 for d in passed if d.meta.get(k))
-        print(
-            f"  {k:9}: {got:4}/{len(passed)} = {got / max(len(passed), 1) * 100:5.1f}%"
-        )
+        print(f"  {k:9}: {got:4}/{len(passed)} = {got / max(len(passed), 1) * 100:5.1f}%")
 
     if UNKNOWN_TYPES:
         print("\n注意:遇到未知元素类型(已丢弃,但记了账 —— 别让新类型被静默吞掉)")

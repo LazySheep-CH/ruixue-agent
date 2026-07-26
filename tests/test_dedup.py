@@ -1,7 +1,7 @@
 """dedup 层测试:Jaccard 近似去重(近似的丢、不同的留),阈值尺度无关。"""
 
-from ruixue_agent.ingestion.stages.dedup import dedup_documents, jaccard
 from ruixue_agent.ingestion.schema import Document, Element
+from ruixue_agent.ingestion.stages.dedup import dedup_documents, jaccard
 
 _A = (
     "全生物降解地膜以PBAT和PLA为主要原料,通过吹膜工艺制备。在新疆棉花种植区开展田间试验,"

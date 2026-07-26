@@ -1,0 +1,46 @@
+# GitHub Actions CI:每次 push / 提 PR,GitHub 在它的服务器上自动跑这些步骤。
+# 任何一步失败 -> PR 打红叉,拦住合并。这就是"防止改坏代码"的自动闸门。
+name: CI
+
+# 什么时候触发:推到 main、或任何 PR。
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # ── 作业一:代码规范(快,不装重依赖)────────────────────────
+  lint:
+    runs-on: ubuntu-latest # 用 GitHub 提供的 Linux 机器
+    steps:
+      - uses: actions/checkout@v4 # 把仓库代码拉到这台机器上
+      - uses: astral-sh/setup-uv@v5 # 装 uv(我们的包管理器)
+        with:
+          enable-cache: true # 缓存依赖,后续跑得快
+      # uvx = "临时装个工具跑一下",只装 ruff,不用装 torch 那一大坨
+      - name: ruff 规范检查
+        run: uvx ruff check .
+      - name: ruff 格式检查
+        run: uvx ruff format --check .
+
+  # ── 作业二:跑测试 ──────────────────────────────────────────
+  test:
+    runs-on: ubuntu-latest
+    env:
+      # 测试只【构造】模型客户端、不真调 DeepSeek,给个占位 key 让配置能解析即可。
+      DEEPSEEK_API_KEY: sk-ci-dummy
+      # 跳过需要下载大模型的测试(见 tests/test_embedding.py 的 pytestmark)。
+      SKIP_MODEL_TESTS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      # config.yaml 是 gitignored 的,CI 里从模板拷一份出来。
+      - name: 生成 config.yaml
+        run: cp config/config.example.yaml config/config.yaml
+      - name: 装依赖
+        run: uv sync
+      # 连 PostgreSQL / Milvus 的测试,因 CI 没起这些服务,会【自动 skip】(不是失败)。
+      - name: 跑测试
+        run: uv run pytest -q

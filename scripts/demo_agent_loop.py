@@ -61,9 +61,7 @@ def make_tool_call(call_id):
     return AIMessage(
         content="",
         id=f"ai_{call_id}",  # 每条消息 id 必须不同(LangGraph 靠 id 判断是不是同一条)
-        tool_calls=[
-            {"name": "check_film_thickness", "args": {"crop": "玉米"}, "id": call_id}
-        ],
+        tool_calls=[{"name": "check_film_thickness", "args": {"crop": "玉米"}, "id": call_id}],
     )
 
 
