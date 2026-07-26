@@ -1,0 +1,66 @@
+"""用 TabPFN 填充缺失值(整表含目标)—— 实测最强填充器(RMSE 比 MissForest 低 27%)。
+
+    TABPFN_TOKEN=... HF_TOKEN=... uv run python scripts/train/tabpfn_fill.py TS
+
+产出:data/predictors/<name>_tabpfn_filled.csv(离线一次性;慢,几分钟~十几分钟)。
+需环境变量:TABPFN_TOKEN(PriorLabs)+ HF_TOKEN(HuggingFace 门禁权重)。
+DR 零缺失,无需填充。
+"""
+
+from __future__ import annotations
+
+import sys
+import time
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+from sklearn.experimental import enable_iterative_imputer  # noqa: F401
+from sklearn.impute import IterativeImputer
+
+from ruixue_agent.predictors.schema import MODELS
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def main(name: str) -> None:
+    from tabpfn import TabPFNRegressor  # 延迟导入(要先设好 token 环境变量)
+
+    cfg = MODELS[name]
+    cols = cfg["features"] + [cfg["target"]]
+    df = pd.read_csv(ROOT / "data" / "predictors" / cfg["data"], encoding="utf-8-sig")
+    df = df[cols].apply(pd.to_numeric, errors="coerce")
+
+    # Fertilizer 编码归一
+    if cfg["fertilizer_map"]:
+        df["Fertilizer"] = df["Fertilizer"].map(
+            lambda v: cfg["fertilizer_map"].get(int(v)) if pd.notna(v) else np.nan
+        )
+
+    # 越界处理:TS 删物理不可能行;DR/WVTR 裁剪
+    for col, (lo, hi) in cfg["ranges"].items():
+        if col not in df.columns:
+            continue
+        if cfg["drop_policy"] == "drop":
+            df = df[(df[col].isna()) | ((df[col] >= lo) & (df[col] <= hi))]
+        else:
+            df[col] = df[col].clip(lo, hi)
+    df = df.reset_index(drop=True)
+
+    print(f"{name}: {len(df)} 行,TabPFN 填整表(含目标)...")
+    t = time.time()
+    filled = pd.DataFrame(
+        IterativeImputer(estimator=TabPFNRegressor(), max_iter=3, random_state=42).fit_transform(
+            df
+        ),
+        columns=cols,
+    )
+    out = ROOT / "data" / "predictors" / f"{name}_tabpfn_filled.csv"
+    filled.to_csv(out, index=False)
+    print(f"  完成 {time.time() - t:.0f}s → {out.name}")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2 or sys.argv[1] not in MODELS:
+        sys.exit(f"用法: python scripts/train/tabpfn_fill.py [{'/'.join(MODELS)}]")
+    main(sys.argv[1])
