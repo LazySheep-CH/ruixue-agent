@@ -17,7 +17,10 @@ __pycache__/
 # 判断标准就一句:能不能用代码重新生成?
 #   能 → 是产物,不进 git(data/ 全部能:MinerU 输出重跑管道就有)
 #   不能 → 是资产,得有别的地方存(原始 PDF → 以后进 MinIO)
-data/
+# 忽略 data/ 下的内容,但【保留】data/predictors/(预测模型训练输入,小、是复现根基)。
+# 注意:必须用 data/* 而非 data/ —— 整目录被忽略时,子目录例外不生效。
+data/*
+!data/predictors/
 mineru-out/
 
 # 模型权重(几个 G,由 sentence-transformers 自己缓存)

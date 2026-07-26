@@ -31,6 +31,12 @@ dependencies = [
     "langgraph-checkpoint-postgres>=3.1.0",
     "psycopg-pool>=3.3.1",
     "slowapi>=0.1.10",
+    "pandas>=2.0",          # 预测模型:训练/服务的数据处理
+    "scikit-learn>=1.9",    # 预测模型:插补/树模型/交叉验证(显式锁定,模型可复现)
+    "xgboost>=2.0",         # 预测模型:DR 基线(对齐论文)
+    "lightgbm>=4.0",        # 预测模型:benchmark 候选(强、快)
+    "tabpfn>=8.1.0",
+    "shap>=0.51.0",
 ]
 
 # ── 开发依赖组 ────────────────────────────────────────────────────

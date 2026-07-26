@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "note": "预测模型训练输入的血缘清单;三套独立schema,不合并",
+  "files": {
+    "DR.csv": {
+      "source": "D:\\LLM_RuiXue\\原始数据\\DR.csv",
+      "sha256": "01217e469ee98fd51259c3aacce400c6bb33eaf172e3c105c2954b6e44f09b53",
+      "n_rows": 699,
+      "n_features": 24,
+      "target": "Target_DR_pct",
+      "features": [
+        "PLA_pct",
+        "PBAT_pct",
+        "Thickness_um",
+        "Area_mm2",
+        "burial_depth_cm",
+        "Time_days",
+        "Temperature_C",
+        "Precipitation_mm",
+        "solar_rad_MJm2d",
+        "Soil_pH",
+        "soil_moisture_pct",
+        "soil_bulk_density",
+        "soil_clay_pct",
+        "soil_silt_pct",
+        "soil_sand_pct",
+        "soil_coarse_frag_pct",
+        "Soil_TN_mgkg",
+        "Soil_OC_gkg",
+        "micro_shannon",
+        "micro_chao1",
+        "compost",
+        "pre_photodegradation",
+        "plough",
+        "co2_emission"
+      ]
+    },
+    "WVTR.csv": {
+      "source": "D:\\LLM_RuiXue\\原始数据\\WVTR.csv",
+      "sha256": "8e9bdf1cee5165890d7203151a2c39507b95fc7e530920bcff788a5d41509150",
+      "n_rows": 568,
+      "n_features": 17,
+      "target": "Target_WVTR",
+      "features": [
+        "Time_days",
+        "PBAT_pct",
+        "PLA_pct",
+        "Recyclable Materials",
+        "Additive Type",
+        "Color",
+        "Thickness_um",
+        "Roughness",
+        "Area_mm2",
+        "UV",
+        "Precipitation_mm",
+        "Temperature_C",
+        "Humidity",
+        "Soil_TN_mgkg",
+        "Soil_OC_gkg",
+        "Soil_pH",
+        "Fertilizer"
+      ]
+    },
+    "TS.csv": {
+      "source": "D:\\LLM_RuiXue\\原始数据\\RF.csv",
+      "sha256": "4729e6a35b1ff8e5355f9d04c1cf6f5310378c1647a9e2e5260e0f366602da80",
+      "n_rows": 2738,
+      "n_features": 17,
+      "target": "Target_TS_MPa",
+      "features": [
+        "Time_days",
+        "PBAT_pct",
+        "PLA_pct",
+        "Recyclable Materials",
+        "Additive Type",
+        "Color",
+        "Thickness_um",
+        "Roughness",
+        "Area_mm2",
+        "UV",
+        "Precipitation_mm",
+        "Temperature_C",
+        "Air_Humidity_pct",
+        "Soil_TN_mgkg",
+        "Soil_OC_gkg",
+        "Soil_pH",
+        "Fertilizer"
+      ]
+    }
+  }
+}
