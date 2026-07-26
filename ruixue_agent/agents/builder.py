@@ -14,6 +14,7 @@ from ruixue_agent.agents.middlewares import (
 from ruixue_agent.agents.prompt import SYSTEM_PROMPT
 from ruixue_agent.checkpointer import get_checkpointer
 from ruixue_agent.models import create_model
+from ruixue_agent.subagents import delegate_to_expert
 from ruixue_agent.tools import get_tools
 
 # ── 稳定性 / 成本的几个闸门(集中在这里,便于调参)──────────────────
@@ -39,7 +40,9 @@ def create_ruixue_agent(
     没必要用贵的 pro —— 同样的活,flash 便宜一个量级。
     """
     model = create_model(model_name)
-    tools = get_tools()
+    # 主 agent 的工具 = 基础叶子工具 + 委派工具(多 Agent)。
+    # delegate 只给主 agent、不给专家(专家用各自窄工具集),专家因此无法再派活(防递归)。
+    tools = [*get_tools(), delegate_to_expert]
     return create_agent(
         model,
         tools,
