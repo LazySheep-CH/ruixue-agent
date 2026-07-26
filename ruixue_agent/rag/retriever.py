@@ -48,7 +48,12 @@ class Hit:
 
 class Retriever:
     def __init__(
-        self, store, repo, bm25=None, weights=(1.0, _BM25_WEIGHT), reranker=None,
+        self,
+        store,
+        repo,
+        bm25=None,
+        weights=(1.0, _BM25_WEIGHT),
+        reranker=None,
         rewriter=None,
     ) -> None:
         """store: 向量检索(须有 .search());repo: 文本存取(须有 .get_chunks())。
@@ -79,9 +84,7 @@ class Retriever:
 
         # 1. 向量检索子块,按超取倍数放大。过滤条件透传给 Milvus 做前过滤,
         #    在本层筛(后过滤)可能把候选筛空。
-        hits = self.store.search(
-            retr_query, k=k * _FANOUT, year_min=year_min, source=source
-        )
+        hits = self.store.search(retr_query, k=k * _FANOUT, year_min=year_min, source=source)
         if not hits:
             return []
 
@@ -123,9 +126,7 @@ class Retriever:
         #    答案提上来,先截断则无候选可提。重排只作用于已召回的候选,
         #    上限受检索召回率约束。
         if self.reranker is not None and parents:
-            new_order = self.reranker.rerank(
-                query, [(p.chunk_id, p.text) for p in parents]
-            )
+            new_order = self.reranker.rerank(query, [(p.chunk_id, p.text) for p in parents])
             by_id = {p.chunk_id: p for p in parents}
             best_score = dict(new_order)
             parents = [by_id[cid] for cid, _ in new_order]

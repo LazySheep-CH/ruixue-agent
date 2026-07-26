@@ -35,9 +35,7 @@ def test_case_d_fullwidth_brackets_and_tags():
 
 def test_keywords_stop_at_next_mark():
     """关键词行后面常紧跟'中图分类号:...' → 要截断,不能吃进来。"""
-    kw = extract_keywords(
-        ["关键词 双通道;YOLOv8s;棉花地膜 中图分类号:U495 文献标志码:A"]
-    )
+    kw = extract_keywords(["关键词 双通道;YOLOv8s;棉花地膜 中图分类号:U495 文献标志码:A"])
     assert kw == ["双通道", "YOLOv8s", "棉花地膜"]
 
 

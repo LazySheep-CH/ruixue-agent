@@ -86,10 +86,7 @@ async def _handle_unexpected(request: Request, exc: Exception) -> JSONResponse:
     # 2. 给用户返回脱敏的通用错误(注意:content 里【绝不能】放 exc 的内容!):
     #      return JSONResponse(status_code=500, content={"detail": "服务器内部错误，请稍后重试"})
     logger.exception("未处理异常: %s", exc)
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "服务器内部错误，请稍后重试"}
-    )
+    return JSONResponse(status_code=500, content={"detail": "服务器内部错误，请稍后重试"})
 
 
 # ── 健康检查(可运维)──────────────────────────────────────────
@@ -129,6 +126,7 @@ def health_ready():
 # ── 请求 / 响应模型 ────────────────────────────────────────────
 class ChatRequest(BaseModel):
     """客户端 POST 过来的 JSON。"""
+
     # ===== (你写)=====
     # 给两个字段加【长度上限】(Field 声明"这个字段最长多少",防超长输入烧 token)。
     # 把下面两行改成:
@@ -140,6 +138,7 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     """返回给客户端的 JSON。"""
+
     answer: str
 
 
@@ -153,9 +152,7 @@ def chat(
 ) -> ChatResponse:
     thread_id = f"{user_id}:{req.thread_id}"  # 命名空间隔离:用户只能碰自己的对话
     config = {"configurable": {"thread_id": thread_id}}
-    result = _agent.invoke(
-        {"messages": [{"role": "user", "content": req.message}]}, config=config
-    )
+    result = _agent.invoke({"messages": [{"role": "user", "content": req.message}]}, config=config)
     return ChatResponse(answer=result["messages"][-1].content)
 
 
@@ -171,15 +168,18 @@ def chat_stream(
     config = {"configurable": {"thread_id": thread_id}}
 
     def event_generator():
-        for chunk, meta in _agent.stream(
+        # _meta 用不到,用下划线开头表示"我知道它在,但故意不用"(避免 lint 报未用变量)
+        for chunk, _meta in _agent.stream(
             {"messages": [{"role": "user", "content": req.message}]},
             config=config,
             stream_mode="messages",
         ):
             reasoning = chunk.additional_kwargs.get("reasoning_content")
             if reasoning:
-                yield f"data: {json.dumps({'type': 'thinking', 'text': reasoning}, ensure_ascii=False)}\n\n"
+                payload = json.dumps({"type": "thinking", "text": reasoning}, ensure_ascii=False)
+                yield f"data: {payload}\n\n"
             if chunk.content:
-                yield f"data: {json.dumps({'type': 'answer', 'text': chunk.content}, ensure_ascii=False)}\n\n"
+                payload = json.dumps({"type": "answer", "text": chunk.content}, ensure_ascii=False)
+                yield f"data: {payload}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")

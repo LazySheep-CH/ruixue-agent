@@ -33,9 +33,7 @@ def main() -> None:
 
     engine = get_engine()
     with engine.connect() as conn:
-        total = conn.execute(
-            text("SELECT count(*) FROM chunks WHERE kind='child'")
-        ).scalar()
+        total = conn.execute(text("SELECT count(*) FROM chunks WHERE kind='child'")).scalar()
     print(f"PG 里有 {total:,} 个子块要 embed")
     print(f"Milvus 里已有 {store.count():,} 个 —— 这些会跳过\n")
 

@@ -1,7 +1,7 @@
 """clean 层测试:prose 被规范化,table/formula 结构不被破坏。"""
 
-from ruixue_agent.ingestion.stages.clean import clean_document, clean_text
 from ruixue_agent.ingestion.schema import Document, Element
+from ruixue_agent.ingestion.stages.clean import clean_document, clean_text
 
 
 def test_clean_text_normalizes():

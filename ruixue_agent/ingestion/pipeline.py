@@ -9,13 +9,13 @@
 
 from __future__ import annotations
 
+from ruixue_agent.ingestion.parsers.mineru_parser import parse_content_list
+from ruixue_agent.ingestion.schema import Chunk, Document
 from ruixue_agent.ingestion.stages.chunk import chunk_document
 from ruixue_agent.ingestion.stages.clean import clean_document
 from ruixue_agent.ingestion.stages.dedup import dedup_documents
 from ruixue_agent.ingestion.stages.metadata import extract_metadata
-from ruixue_agent.ingestion.parsers.mineru_parser import parse_content_list
 from ruixue_agent.ingestion.stages.quality import assess_quality
-from ruixue_agent.ingestion.schema import Chunk, Document
 
 
 def parse_and_clean(content_list: list[dict], meta: dict) -> Document:

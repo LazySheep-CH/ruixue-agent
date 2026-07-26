@@ -35,12 +35,8 @@ class Element(BaseModel):
     text: str  # 文字;table 存 HTML,formula 存 LaTeX
     page: int  # 页码(从 0 开始),用于溯源"这句话在原文第几页"
     level: int | None = None  # 标题层级;只有 type=heading 才有值,其余为 None
-    bbox: list[float] | None = (
-        None  # 版面坐标 [x0,y0,x1,y1];现在不用,留给以后高亮原文/多模态
-    )
-    meta: dict = Field(
-        default_factory=dict
-    )  # 各类型的专属数据袋(latex/table_body/img_path…)
+    bbox: list[float] | None = None  # 版面坐标 [x0,y0,x1,y1];现在不用,留给以后高亮原文/多模态
+    meta: dict = Field(default_factory=dict)  # 各类型的专属数据袋(latex/table_body/img_path…)
 
     @field_validator("type")
     @classmethod
@@ -57,15 +53,11 @@ class Chunk(BaseModel):
     chunk_id: str  # 唯一 ID(如 {document_id}_{序号})
     document_id: str  # 外键 → 属于哪篇 Document,溯源用
     text: str  # 这一块的文本(送去 embedding 的内容)
-    section_path: list[str] = Field(
-        default_factory=list
-    )  # 章节路径 ["1 实验部分","1.1 主要原料"]
+    section_path: list[str] = Field(default_factory=list)  # 章节路径 ["1 实验部分","1.1 主要原料"]
     page_start: int = 0  # 起始页(溯源:答案在第几页)
     page_end: int = 0  # 结束页
     parent_id: str | None = None  # 子块 → 父块的 ID;父块为 None(Small-to-Big)
-    meta: dict = Field(
-        default_factory=dict
-    )  # 携带 Document 的元数据(标题/年份/来源…)便于过滤
+    meta: dict = Field(default_factory=dict)  # 携带 Document 的元数据(标题/年份/来源…)便于过滤
 
 
 class Document(BaseModel):
@@ -78,9 +70,7 @@ class Document(BaseModel):
     source: str  # 来源:期刊论文 / 标准规范 / 爬虫;元数据过滤 + 权威性排序
     parser: str  # 谁解析的:mineru / text;数据血缘,换解析器后可追溯
     elements: list[Element] = Field(default_factory=list)  # 结构单元列表,下游唯一入口
-    meta: dict = Field(
-        default_factory=dict
-    )  # 文档级元数据:标题/作者/年份/DOI(后面 metadata 层填)
+    meta: dict = Field(default_factory=dict)  # 文档级元数据:标题/作者/年份/DOI(后面 metadata 层填)
 
 
 # 设计说明:IR 只存原始信号(如 heading 的 level),派生结构(章节路径)由

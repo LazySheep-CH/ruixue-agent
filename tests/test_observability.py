@@ -16,8 +16,13 @@ def test_log_filter_stamps_request_id():
     token = request_id_var.set("test-rid-123")
     try:
         record = logging.LogRecord(
-            name="x", level=logging.INFO, pathname=__file__, lineno=1,
-            msg="hi", args=(), exc_info=None,
+            name="x",
+            level=logging.INFO,
+            pathname=__file__,
+            lineno=1,
+            msg="hi",
+            args=(),
+            exc_info=None,
         )
         RequestIdLogFilter().filter(record)
         assert record.request_id == "test-rid-123"

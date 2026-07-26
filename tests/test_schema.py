@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from ruixue_agent.ingestion.schema import Document, Element, ELEMENT_TYPES
+from ruixue_agent.ingestion.schema import ELEMENT_TYPES, Document, Element
 
 
 def test_build_a_document():
@@ -44,9 +44,7 @@ def test_json_round_trip():
         sha256="h",
         source="期刊论文",
         parser="mineru",
-        elements=[
-            Element(type="formula", text=r"E=mc^2", page=3, meta={"latex": r"E=mc^2"})
-        ],
+        elements=[Element(type="formula", text=r"E=mc^2", page=3, meta={"latex": r"E=mc^2"})],
     )
     blob = doc.model_dump_json()  # → 存盘时就写这个字符串
     back = Document.model_validate_json(blob)  # ← 读盘时这样还原

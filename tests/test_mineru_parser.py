@@ -108,9 +108,7 @@ def test_table_and_formula_payload():
 
 def test_document_metadata():
     doc = parse_content_list(RAW, META)
-    assert (
-        doc.document_id == "d1" and doc.source == "期刊论文" and doc.parser == "mineru"
-    )
+    assert doc.document_id == "d1" and doc.source == "期刊论文" and doc.parser == "mineru"
 
 
 def test_empty_shell_table_is_dropped():
@@ -153,8 +151,6 @@ def test_unknown_type_is_counted_not_silently_dropped():
     from ruixue_agent.ingestion.parsers.mineru_parser import UNKNOWN_TYPES
 
     UNKNOWN_TYPES.clear()
-    doc = parse_content_list(
-        [{"type": "aside_text", "text": "边栏", "page_idx": 0}], META
-    )
+    doc = parse_content_list([{"type": "aside_text", "text": "边栏", "page_idx": 0}], META)
     assert doc.elements == []
     assert UNKNOWN_TYPES["aside_text"] == 1

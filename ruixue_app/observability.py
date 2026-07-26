@@ -43,9 +43,7 @@ def configure_logging(level: int = logging.INFO) -> None:
     handler = logging.StreamHandler()
     handler.addFilter(RequestIdLogFilter())
     handler.setFormatter(
-        logging.Formatter(
-            "%(asctime)s %(levelname)s [req=%(request_id)s] %(name)s: %(message)s"
-        )
+        logging.Formatter("%(asctime)s %(levelname)s [req=%(request_id)s] %(name)s: %(message)s")
     )
     root = logging.getLogger()
     root.handlers.clear()  # 清掉可能已存在的 handler,避免日志打两遍

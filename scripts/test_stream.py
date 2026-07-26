@@ -11,9 +11,7 @@ import urllib.request
 
 sys.stdout.reconfigure(encoding="utf-8")
 
-body = json.dumps(
-    {"thread_id": "s2", "message": "PBAT地膜的降解机制是什么?"}
-).encode("utf-8")
+body = json.dumps({"thread_id": "s2", "message": "PBAT地膜的降解机制是什么?"}).encode("utf-8")
 
 req = urllib.request.Request(
     "http://127.0.0.1:8000/chat/stream",
@@ -28,7 +26,7 @@ with urllib.request.urlopen(req) as resp:
         line = raw.decode("utf-8").strip()
         if not line.startswith("data: "):
             continue
-        event = json.loads(line[len("data: "):])
+        event = json.loads(line[len("data: ") :])
         if event["type"] == "thinking":
             print(event["text"], end="", flush=True)
         else:  # answer
