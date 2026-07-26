@@ -13,6 +13,15 @@ INF = float("inf")
 # 厚度/温度这类"可疑但可能合理"的【不】进来(不盲改),留待单位诊断。
 _PCT = (0.0, 100.0)
 
+# 分类变量的合法整数取值域(WVTR/TS 共用)。填充后必须四舍五入回整数 + 裁剪到这个范围,
+# 否则会出现 Color=2.4、Fertilizer=0.7 这种无意义的小数类别码。
+CATEGORICAL_DOMAINS: dict[str, tuple[int, int]] = {
+    "Additive Type": (0, 7),  # 0=增塑…7=增容
+    "Color": (1, 3),          # 1=黑 2=白/透 3=黄
+    "Roughness": (1, 3),      # 1=光滑 2=较光滑 3=粗糙
+    "Fertilizer": (0, 1),     # 归一后:0=未使用 1=使用
+}
+
 MODELS: dict[str, dict] = {
     "DR": {
         "data": "DR.csv",
