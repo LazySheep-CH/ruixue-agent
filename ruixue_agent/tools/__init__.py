@@ -11,7 +11,12 @@ from ruixue_agent.tools.rag import search_knowledge
 
 
 def get_tools() -> list[BaseTool]:
-    """返回 agent 可用的全部工具。"""
+    """返回【基础叶子工具】。
+
+    这一层是最底层的具体工具,不依赖上层。多 Agent 的 delegate_to_expert
+    属于"组装层"能力,由 builder 拼给主 agent(见 builder.py),不放这里 ——
+    否则 tools 反向依赖 subagents,会形成循环导入。
+    """
     return [
         estimate_film_usage,  # 用量/成本计算(确定性)
         search_knowledge,  # 知识库检索(Agentic RAG,带出处)
