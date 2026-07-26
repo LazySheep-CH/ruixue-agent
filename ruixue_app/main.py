@@ -7,6 +7,7 @@
 
 import json
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -20,10 +21,30 @@ from ruixue_app.auth import get_current_user
 
 logging.basicConfig(level=logging.INFO)
 
-app = FastAPI(title="瑞雪地膜智能助手")
+# agent 先占位;真正在服务【启动】时才建(见下面的 lifespan)。
+_agent = None
 
-# 启动时建一次 agent,所有请求复用。建 agent 含加载模型,贵 —— 别每次请求都建。
-_agent = create_ruixue_agent()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """服务的生命周期钩子:yield 之前 = 启动时跑一次;yield 之后 = 关闭时跑一次。
+
+    为什么要它:之前 `_agent = create_ruixue_agent()` 写在模块顶层,
+    意味着【任何人 import 这个文件】都会立刻建 agent(连库、加载模型)。
+    跑测试、被别的脚本导入,都会莫名其妙连库。放进 lifespan 后,
+    只有真正【起服务】时才建,一次,之后所有请求复用同一个 agent。
+    """
+    global _agent  # 要在函数里【改】模块全局变量,必须先声明 global
+    # ===== (你写一行)=====
+    # 服务启动:建一次 agent,存进 _agent 给所有请求复用:
+    #   _agent = create_ruixue_agent()
+    _agent = create_ruixue_agent()
+    yield
+    # ↑ yield 前是"启动";yield 后是"关闭"。关闭时的清理写在这下面
+    #   (目前没有要清理的资源,先留空)。
+
+
+app = FastAPI(title="瑞雪地膜智能助手", lifespan=lifespan)
 
 
 # ── 限流(Rate Limiting)────────────────────────────────────────
