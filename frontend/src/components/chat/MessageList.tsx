@@ -3,31 +3,66 @@
 import { useEffect, useRef } from "react";
 
 import { renderMarkdown } from "~/lib/markdown";
-import type { Message } from "~/core/types";
+import type { Message, ToolRun } from "~/core/types";
 
 const SUGGESTIONS = [
-  { title: "新疆尉犁的地膜表现", q: "新疆尉犁,PBAT70/PLA30 的 10µm 地膜,盖 90 天会怎样?" },
+  { title: "按地点预测性能", q: "新疆尉犁,PBAT70/PLA30 的 10µm 地膜,盖 90 天会怎样?" },
   { title: "查当地土壤", q: "寿光的土壤 pH 和有机质怎么样?" },
   { title: "估算用量", q: "100 亩地用 0.01mm 生物降解膜,要多少公斤?" },
   { title: "原理问答", q: "PBAT 地膜的降解机理是什么?" },
 ];
 
-/** 空态:欢迎语 + 建议问题(点了填进输入框)。 */
+/** 工具名 → 给用户看的中文说明(技术名对用户没意义)。 */
+const TOOL_LABELS: Record<string, { doing: string; done: string }> = {
+  search_knowledge: { doing: "正在检索知识库", done: "检索了知识库" },
+  estimate_film_usage: { doing: "正在估算用量", done: "估算了用量" },
+  get_soil_info: { doing: "正在查询土壤数据", done: "查询了土壤数据" },
+  get_climate_info: { doing: "正在查询气候数据", done: "查询了气候数据" },
+  predict_by_location: { doing: "正在按地点预测性能", done: "按地点预测了性能" },
+  predict_degradation: { doing: "正在预测降解率", done: "预测了降解率" },
+  predict_water_vapor_rate: { doing: "正在预测水蒸气透过率", done: "预测了水蒸气透过率" },
+  predict_tensile_strength: { doing: "正在预测拉伸强度", done: "预测了拉伸强度" },
+  delegate_to_expert: { doing: "正在请专家处理", done: "请专家处理了子任务" },
+};
+
+const label = (t: ToolRun) =>
+  TOOL_LABELS[t.name]?.[t.done ? "done" : "doing"] ?? (t.done ? t.name : `正在调用 ${t.name}`);
+
+/** 工具调用条:让用户看见 agent 在做什么 —— agent 产品的核心体验。 */
+function ToolTrace({ tools }: { tools: ToolRun[] }) {
+  return (
+    <div className="mb-3 space-y-1">
+      {tools.map((t) => (
+        <div key={t.name} className="flex items-center gap-2 text-[13px] text-muted">
+          <span
+            className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+              t.done ? "bg-brand" : "bg-brand running"
+            }`}
+          />
+          <span>{label(t)}</span>
+          {t.done && <span className="text-brand">✓</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** 空态:欢迎语 + 建议问题。 */
 function Welcome({ onPick }: { onPick: (q: string) => void }) {
   return (
-    <div className="py-14 text-center">
-      <h1 className="mb-2 text-[28px] font-semibold">今天想了解地膜的什么?</h1>
-      <p className="text-muted">覆盖知识问答、性能预测与用量估算</p>
-      <div className="mt-6 grid gap-2.5 sm:grid-cols-2">
+    <div className="pt-16">
+      <h1 className="mb-2 text-[30px] font-medium tracking-tight">今天想了解地膜的什么?</h1>
+      <p className="mb-8 text-muted">知识问答 · 性能预测 · 环境查询 · 用量估算</p>
+      <div className="space-y-2">
         {SUGGESTIONS.map((s) => (
           <button
             key={s.title}
             onClick={() => onPick(s.q)}
-            className="rounded-card border border-line bg-surface px-4 py-3.5 text-left transition
-              hover:-translate-y-px hover:border-[#d6d6e0] hover:shadow-[0_4px_14px_rgba(17,17,26,.05)]"
+            className="group flex w-full items-baseline gap-3 rounded-lg px-3 py-2.5 text-left
+              transition hover:bg-sand"
           >
-            <b className="mb-0.5 block text-sm font-semibold">{s.title}</b>
-            <span className="text-[13px] text-muted">{s.q}</span>
+            <span className="shrink-0 text-[13px] font-medium text-brand">{s.title}</span>
+            <span className="truncate text-[14px] text-muted group-hover:text-ink">{s.q}</span>
           </button>
         ))}
       </div>
@@ -35,33 +70,35 @@ function Welcome({ onPick }: { onPick: (q: string) => void }) {
   );
 }
 
+/** 用户消息:淡色块;助手消息:整块流式正文(不用气泡)。 */
 function Bubble({ m }: { m: Message }) {
-  const isUser = m.role === "user";
+  if (m.role === "user") {
+    return (
+      <div className="mb-7 rounded-card bg-sand px-4 py-3">
+        <div className="prose-msg">{m.content}</div>
+      </div>
+    );
+  }
   return (
-    <div className="mb-6 flex gap-3">
-      <div
-        className={`flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[9px] text-xs font-semibold
-          ${isUser ? "bg-[#e8e8ef] text-muted" : "bg-gradient-to-br from-brand to-[#7aa2ff] text-white"}`}
-      >
-        {isUser ? "我" : "瑞"}
-      </div>
-      <div className="min-w-0 flex-1 pt-0.5">
-        {m.thinking && (
-          <details className="mb-2.5 border-l-2 border-line py-0.5 pl-3 text-[13.5px] text-muted">
-            <summary className="cursor-pointer select-none pb-1 text-[13px]">思考过程</summary>
-            <div className="whitespace-pre-wrap">{m.thinking}</div>
-          </details>
-        )}
-        {m.error ? (
-          <p className="text-sm text-[#d33]">{m.error}</p>
-        ) : (
-          <div
-            className={`prose-msg ${m.streaming && !m.content ? "cursor" : ""}`}
-            // 内容已在 renderMarkdown 里先转义再套标签,无 XSS 风险
-            dangerouslySetInnerHTML={{ __html: renderMarkdown(m.content) }}
-          />
-        )}
-      </div>
+    <div className="mb-9">
+      {m.tools && m.tools.length > 0 && <ToolTrace tools={m.tools} />}
+      {m.thinking && (
+        <details className="mb-3 rounded-lg border border-line bg-surface px-3 py-2">
+          <summary className="cursor-pointer select-none text-[13px] text-muted">思考过程</summary>
+          <div className="mt-2 whitespace-pre-wrap text-[13.5px] leading-relaxed text-muted">
+            {m.thinking}
+          </div>
+        </details>
+      )}
+      {m.error ? (
+        <p className="text-sm text-[#c0392b]">{m.error}</p>
+      ) : (
+        <div
+          className={`prose-msg ${m.streaming && !m.content ? "cursor" : ""}`}
+          // renderMarkdown 内部先转义再套标签,无 XSS 风险
+          dangerouslySetInnerHTML={{ __html: renderMarkdown(m.content) }}
+        />
+      )}
     </div>
   );
 }
@@ -75,18 +112,21 @@ export function MessageList({
 }) {
   const endRef = useRef<HTMLDivElement>(null);
 
-  // 新内容到达时自动滚到底(流式过程中持续触发)
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages]);
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-7">
-      <div className="mx-auto max-w-[760px]">
+    <div className="flex-1 overflow-y-auto px-6">
+      <div className="mx-auto max-w-reading pb-6">
         {messages.length === 0 ? (
           <Welcome onPick={onPick} />
         ) : (
-          messages.map((m) => <Bubble key={m.id} m={m} />)
+          <div className="pt-8">
+            {messages.map((m) => (
+              <Bubble key={m.id} m={m} />
+            ))}
+          </div>
         )}
         <div ref={endRef} />
       </div>

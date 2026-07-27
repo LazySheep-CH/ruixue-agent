@@ -99,14 +99,38 @@ export const useStore = create<State>()(
 
         controller = new AbortController();
         try {
-          await streamChat({ threadId, message: text }, (e) => {
-            patch((m) =>
-              e.type === "thinking"
-                ? { ...m, thinking: (m.thinking ?? "") + e.text }
-                : { ...m, content: m.content + e.text },
-            );
-          }, controller.signal);
-          patch((m) => ({ ...m, streaming: false }));
+          await streamChat(
+            { threadId, message: text },
+            (e) => {
+              patch((m) => {
+                switch (e.type) {
+                  case "thinking":
+                    return { ...m, thinking: (m.thinking ?? "") + e.text };
+                  case "answer":
+                    return { ...m, content: m.content + e.text };
+                  case "tool_start": {
+                    const tools = m.tools ?? [];
+                    if (tools.some((t) => t.name === e.name)) return m;
+                    return { ...m, tools: [...tools, { name: e.name, done: false }] };
+                  }
+                  case "tool_end":
+                    return {
+                      ...m,
+                      tools: (m.tools ?? []).map((t) =>
+                        t.name === e.name ? { ...t, done: true } : t,
+                      ),
+                    };
+                }
+              });
+            },
+            controller.signal,
+          );
+          // 流结束:把还挂着的工具标记为完成,避免出现永远转圈的进度
+          patch((m) => ({
+            ...m,
+            streaming: false,
+            tools: (m.tools ?? []).map((t) => ({ ...t, done: true })),
+          }));
         } catch (err) {
           const aborted = err instanceof DOMException && err.name === "AbortError";
           patch((m) => ({
