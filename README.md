@@ -61,7 +61,14 @@ ruixue_agent/                # HARNESS:agent 框架(不认识 HTTP)
     └── generate.py           检索结果 → 带引用的答案(grounding)
 
 ruixue_app/                  # APP:服务层(FastAPI),依赖 harness
-└── main.py                  POST /chat(多轮)· POST /chat/stream(SSE 流式)
+├── main.py                  POST /chat(多轮)· /chat/stream(SSE)· /health · CORS
+├── auth.py                  API Key 认证 + 按用户命名空间隔离
+└── observability.py         request_id 追踪 + 结构化日志
+
+frontend/                    # WEB:聊天界面(Next.js + TS + Tailwind + zustand)
+├── src/core/                业务核心(类型 · SSE 客户端 · 状态),不认识 React
+├── src/components/chat/     组件(会话面板 · 顶栏 · 消息列表 · 输入框)
+└── src/app/                 App Router 页面
 ```
 
 设计要点:
@@ -107,7 +114,10 @@ uv run alembic -c ruixue_agent/persistence/migrations/alembic.ini upgrade head
 uv run pytest
 
 # 6. 起服务(FastAPI:多轮对话 + 流式 SSE)
-uv run uvicorn ruixue_app.main:app --reload    # 浏览器开 http://127.0.0.1:8000/docs 点着测
+uv run uvicorn ruixue_app.main:app --reload    # API 文档 http://127.0.0.1:8000/docs
+
+# 7. 起前端(聊天界面,另开一个终端)
+cd frontend && npm install && npm run dev      # 浏览器开 http://127.0.0.1:3000
 ```
 
 完整的入库 / 灌向量 / 评测流程见 [docs/操作手册.md](docs/操作手册.md)。
