@@ -8,9 +8,12 @@
 import json
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from langchain_core.messages import AIMessageChunk
 from pydantic import BaseModel, Field
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -174,6 +177,10 @@ def chat_stream(
             config=config,
             stream_mode="messages",
         ):
+            # 只推【模型说的话】。stream_mode="messages" 也会推 ToolMessage(工具返回的
+            # 原文),那是给模型看的中间结果,推给用户会造成"工具原文 + 正式回答"重复。
+            if not isinstance(chunk, AIMessageChunk):
+                continue
             reasoning = chunk.additional_kwargs.get("reasoning_content")
             if reasoning:
                 payload = json.dumps({"type": "thinking", "text": reasoning}, ensure_ascii=False)
@@ -183,3 +190,16 @@ def chat_stream(
                 yield f"data: {payload}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+# ── 前端页面(同源托管:免 CORS,一条命令即可访问)────────────────
+# 放在文件末尾:先注册所有 API 路由,再挂静态,避免根路径抢占 /chat 等端点。
+_STATIC = Path(__file__).parent / "static"
+if _STATIC.is_dir():
+
+    @app.get("/", include_in_schema=False)
+    def index():
+        """聊天页面。浏览器打开 http://127.0.0.1:8000/ 即可使用。"""
+        return FileResponse(_STATIC / "index.html")
+
+    app.mount("/static", StaticFiles(directory=_STATIC), name="static")
