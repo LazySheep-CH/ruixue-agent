@@ -164,6 +164,32 @@ class ChatResponse(BaseModel):
     """返回给客户端的 JSON。"""
 
     answer: str
+    # 需人工批准时:answer 为空,pending 给出待批准的操作(见 /chat/resume)
+    pending: list[dict] | None = None
+
+
+class ResumeRequest(BaseModel):
+    """批准/拒绝一个待确认的操作。"""
+
+    thread_id: str = Field(..., max_length=64)
+    approve: bool = Field(..., description="True=批准执行,False=拒绝")
+
+
+def _to_response(result: dict) -> ChatResponse:
+    """把 agent 的返回统一成 ChatResponse。
+
+    开启人工批准(Human-in-the-Loop)后,agent 可能在工具执行前【暂停】,
+    此时返回里没有最终答案,而是 __interrupt__ —— 需要客户端确认后调
+    /chat/resume 继续。不开启时该分支永远不会走到。
+    """
+    interrupts = result.get("__interrupt__")
+    if interrupts:
+        requests = interrupts[0].value.get("action_requests", [])
+        return ChatResponse(
+            answer="",
+            pending=[{"tool": r.get("name"), "args": r.get("args")} for r in requests],
+        )
+    return ChatResponse(answer=result["messages"][-1].content)
 
 
 # ── 端点 ──────────────────────────────────────────────────────
@@ -177,7 +203,27 @@ def chat(
     thread_id = f"{user_id}:{req.thread_id}"  # 命名空间隔离:用户只能碰自己的对话
     config = {"configurable": {"thread_id": thread_id}}
     result = _agent.invoke({"messages": [{"role": "user", "content": req.message}]}, config=config)
-    return ChatResponse(answer=result["messages"][-1].content)
+    return _to_response(result)
+
+
+@app.post("/chat/resume")
+@limiter.limit("20/minute")
+def chat_resume(
+    request: Request,
+    req: ResumeRequest,
+    user_id: str = Depends(get_current_user),
+) -> ChatResponse:
+    """对 /chat 返回的 pending 操作作出批准/拒绝,让对话继续。
+
+    thread_id 同样做命名空间隔离 —— 用户只能批准【自己】会话里的操作,
+    否则就能通过猜 thread_id 去批准别人的待确认操作(越权)。
+    """
+    from langgraph.types import Command
+
+    config = {"configurable": {"thread_id": f"{user_id}:{req.thread_id}"}}
+    decision = "approve" if req.approve else "reject"
+    result = _agent.invoke(Command(resume={"decisions": [{"type": decision}]}), config=config)
+    return _to_response(result)
 
 
 @app.post("/chat/stream")
