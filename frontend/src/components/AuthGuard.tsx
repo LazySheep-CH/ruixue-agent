@@ -34,7 +34,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (ok === null) {
     return (
-      <div className="flex h-screen items-center justify-center text-sm text-muted">载入中…</div>
+      <div className="flex h-screen items-center justify-center text-sm text-muted-foreground">载入中…</div>
     );
   }
   return <>{children}</>;
