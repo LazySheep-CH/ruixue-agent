@@ -55,7 +55,17 @@ def main(name: str) -> None:
         ),
         columns=cols,
     )
-    # 分类变量修正:填充器当连续量填出了小数(如 Color=2.4),四舍五入回整数 + 裁剪合法域。
+    # ① 连续变量修正:插补器不认物理边界,会填出 PBAT=-45% 这种不可能值。
+    #    按变量字典的合理范围裁剪回边界。
+    clipped = {}
+    for col, (lo, hi) in cfg["ranges"].items():
+        if col in filled.columns:
+            bad = int(((filled[col] < lo) | (filled[col] > hi)).sum())
+            if bad:
+                clipped[col] = bad
+                filled[col] = filled[col].clip(lo, hi)
+
+    # ② 分类变量修正:填充器当连续量填出了小数(如 Color=2.4),四舍五入回整数 + 裁剪合法域。
     for col in cfg["categorical"]:
         if col in filled.columns and col in CATEGORICAL_DOMAINS:
             lo, hi = CATEGORICAL_DOMAINS[col]
@@ -63,7 +73,8 @@ def main(name: str) -> None:
 
     out = ROOT / "data" / "predictors" / f"{name}_tabpfn_filled.csv"
     filled.to_csv(out, index=False)
-    print(f"  完成 {time.time() - t:.0f}s → {out.name}(分类列已修正为整数)")
+    print(f"  完成 {time.time() - t:.0f}s → {out.name}")
+    print(f"  连续变量越界裁剪: {clipped or '无'};分类列已修正为整数")
 
 
 if __name__ == "__main__":
