@@ -59,6 +59,24 @@ services:
       timeout: 5s
       retries: 5
 
+  # Redis:多 worker 之间的【共享状态】。
+  # 为什么必须有:限流计数与用量配额若存在各自进程的内存里,4 个 worker 就等于
+  # 限额×4 —— 限流形同虚设,配额也管不住。共享存储是单机多 worker 的前提。
+  redis:
+    container_name: rxmvp-redis
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    # appendonly:配额是"花掉多少钱"的账,重启不能归零
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
   etcd:
     container_name: rxmvp-etcd
     image: quay.io/coreos/etcd:${ETCD_VERSION}
@@ -122,6 +140,7 @@ services:
 # 命名卷:数据由 Docker 管理,不落在项目目录 → 不会污染 git
 volumes:
   postgres_data:
+  redis_data:
   etcd_data:
   minio_data:
   milvus_data:
