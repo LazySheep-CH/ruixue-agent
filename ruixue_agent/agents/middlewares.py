@@ -11,7 +11,9 @@ import logging
 import time
 
 from langchain.agents.middleware import AgentMiddleware
-from langchain_core.messages import ToolMessage
+from langchain_core.messages import SystemMessage, ToolMessage
+
+from ruixue_agent.guardrails.injection import REINFORCE_NOTICE, detect_injection
 
 logger = logging.getLogger("ruixue.agent")
 
@@ -39,6 +41,33 @@ class TimingLoggingMiddleware(AgentMiddleware):
         ms = (time.perf_counter() - t0) * 1000
         logger.info("工具 %s 耗时 %.0fms", name, ms)
         return result
+
+
+class PromptInjectionGuardMiddleware(AgentMiddleware):
+    """提示注入防御:检测用户消息里的注入企图,记日志并重申系统规则。
+
+    为什么【不直接拒绝】:正则判定必然有误差,把真实用户挡在门外的代价,
+    远大于让一次注入企图通过(何况本 agent 的工具全是只读的,破坏上限有限)。
+    故采取"检测 → 告警留痕 → 在上下文里重申身份与边界"的策略 ——
+    既不误伤,又让模型带着防御提示去回答。
+
+    留痕很重要:安全事件要能在日志里查得到(配合 request_id 可定位到具体用户/请求)。
+    """
+
+    def before_model(self, state, runtime):
+        messages = state.get("messages") or []
+        if not messages:
+            return None
+        last = messages[-1]
+        # 只检最后一条【用户】消息:历史消息已检过,工具返回的内容由 RAG 侧边界隔离
+        if type(last).__name__ != "HumanMessage":
+            return None
+        threats = detect_injection(str(last.content))
+        if not threats:
+            return None
+        logger.warning("检测到疑似提示注入: %s", threats)
+        # 追加一条系统消息重申边界(不改用户原文,便于排查时看到真实输入)
+        return {"messages": [SystemMessage(content=REINFORCE_NOTICE)]}
 
 
 class ToolErrorHandlingMiddleware(AgentMiddleware):
