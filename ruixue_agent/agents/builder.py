@@ -8,6 +8,7 @@ from langchain.agents.middleware import (
 )
 
 from ruixue_agent.agents.middlewares import (
+    PromptInjectionGuardMiddleware,
     TimingLoggingMiddleware,
     ToolErrorHandlingMiddleware,
 )
@@ -51,6 +52,9 @@ def create_ruixue_agent(
         checkpointer=get_checkpointer(),
         # ── 中间件链:顺序即设计,不是随便排的(理由见下方注释)──
         middleware=[
+            # ⓪ 提示注入防护:放【最前】—— 安全检查要在花钱(摘要/调模型)之前做,
+            #    且要在最靠近用户输入的位置,后续中间件都在其保护之下。
+            PromptInjectionGuardMiddleware(),
             # ① 死循环刹车:放【最前】。已经到上限就该立刻停,
             #    不能先花钱做摘要、再发现"哦该停了"。省钱的顺序。
             # ===== (你写一行)=====
