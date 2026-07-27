@@ -70,17 +70,18 @@ function Welcome({ onPick }: { onPick: (q: string) => void }) {
   );
 }
 
-/** 用户消息:淡色块;助手消息:整块流式正文(不用气泡)。 */
+/** 用户消息:左侧竖线标记 + 稍暗文字(学自 成熟编码 agent:不用气泡、不用头像,
+ *  靠排版区分角色 —— 信息密度更高,视线不被色块打断)。 */
 function Bubble({ m }: { m: Message }) {
   if (m.role === "user") {
     return (
-      <div className="mb-7 rounded-[var(--radius)] bg-muted px-4 py-3">
-        <div className="prose-msg">{m.content}</div>
+      <div className="mb-5 border-l-2 border-border pl-3">
+        <div className="prose-msg text-[15px] text-muted-foreground">{m.content}</div>
       </div>
     );
   }
   return (
-    <div className="mb-9">
+    <div className="mb-7">
       {m.tools && m.tools.length > 0 && <ToolTrace tools={m.tools} />}
       {m.thinking && (
         <details className="mb-3 rounded-lg border border-border bg-card px-3 py-2">
@@ -111,13 +112,31 @@ export function MessageList({
   onPick: (q: string) => void;
 }) {
   const endRef = useRef<HTMLDivElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages]);
 
+  // 代码块的复制按钮由 markdown 渲染成 HTML,没有 React 事件 ——
+  // 用【事件委托】在容器上统一接管:一个监听器管所有代码块,新增块也自动生效。
+  useEffect(() => {
+    const box = boxRef.current;
+    if (!box) return;
+    const onClick = (e: MouseEvent) => {
+      const btn = (e.target as HTMLElement).closest<HTMLElement>(".copy-btn");
+      if (!btn) return;
+      void navigator.clipboard.writeText(decodeURIComponent(btn.dataset.code ?? ""));
+      const old = btn.textContent;
+      btn.textContent = "已复制";
+      setTimeout(() => (btn.textContent = old), 1200);
+    };
+    box.addEventListener("click", onClick);
+    return () => box.removeEventListener("click", onClick);
+  }, []);
+
   return (
-    <div className="flex-1 overflow-y-auto px-6">
+    <div ref={boxRef} className="flex-1 overflow-y-auto px-6">
       <div className="mx-auto max-w-[46rem] pb-6">
         {messages.length === 0 ? (
           <Welcome onPick={onPick} />
