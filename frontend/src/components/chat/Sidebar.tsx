@@ -4,87 +4,77 @@ import { useState } from "react";
 
 import { useStore } from "~/core/store";
 
-/** 左侧图标条:功能入口 + 折叠会话面板。 */
-export function Rail({ onToggle }: { onToggle: () => void }) {
-  const items = [
-    { icon: "◌", label: "对话", active: true, onClick: onToggle },
-    { icon: "▦", label: "知识库" },
-    { icon: "✦", label: "预测模型" },
-    { icon: "◇", label: "环境数据" },
-  ];
-  return (
-    <aside className="flex w-[74px] shrink-0 flex-col items-center gap-1.5 border-r border-line bg-surface py-3.5">
-      <div className="mb-3.5 h-8 w-8 rounded-[10px] bg-gradient-to-br from-brand to-[#7aa2ff]" />
-      {items.map((it) => (
-        <button
-          key={it.label}
-          title={it.label}
-          onClick={it.onClick}
-          className={`flex h-11 w-11 items-center justify-center rounded-xl text-[17px] transition
-            ${it.active ? "bg-[#eef3ff] text-brand" : "text-muted hover:bg-wash hover:text-ink"}`}
-        >
-          {it.icon}
-        </button>
-      ))}
-      <div className="flex-1" />
-      <div className="flex h-[34px] w-[34px] items-center justify-center rounded-full bg-[#e8e8ef] text-xs font-semibold text-muted">
-        瑞雪
-      </div>
-    </aside>
-  );
-}
-
-/** 会话面板:新建 / 搜索 / 切换 / 删除。会话持久化在 localStorage,刷新不丢。 */
-export function ThreadPanel({ open }: { open: boolean }) {
+/**
+ * 单栏侧边栏(成熟编码 agent 风格):品牌 + 新对话 + 会话列表 + 折叠。
+ * 不再是"图标条 + 面板"两层 —— 一层更简洁,也少一次点击。
+ */
+export function Sidebar({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   const { threads, currentThreadId, newThread, selectThread, deleteThread } = useStore();
   const [q, setQ] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
 
   const list = q ? threads.filter((t) => t.title.includes(q)) : threads;
 
-  return (
-    <aside
-      className={`flex w-[276px] shrink-0 flex-col border-r border-line bg-surface px-3 py-3.5
-        transition-[margin] duration-300 ${open ? "" : "ml-[-276px]"}`}
-    >
-      <div className="flex items-center justify-between px-1 pb-2.5 font-semibold">
-        <span>对话</span>
+  if (!open) {
+    // 收起态:只留一个展开按钮,把空间全让给正文
+    return (
+      <div className="flex w-12 shrink-0 flex-col items-center border-r border-line bg-sand py-3">
         <button
-          title="搜索"
-          onClick={() => setSearchOpen((v) => !v)}
-          className="h-[30px] w-[30px] rounded-lg text-muted hover:bg-wash"
+          onClick={onToggle}
+          title="展开侧栏"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-line"
         >
-          ⌕
+          ☰
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <aside className="flex w-[248px] shrink-0 flex-col border-r border-line bg-sand">
+      <div className="flex items-center gap-2 px-3 py-3">
+        <div className="h-6 w-6 rounded-md bg-brand" />
+        <span className="flex-1 text-[14px] font-medium">瑞雪</span>
+        <button
+          onClick={onToggle}
+          title="收起侧栏"
+          className="flex h-7 w-7 items-center justify-center rounded-md text-muted hover:bg-line"
+        >
+          ☰
         </button>
       </div>
 
-      <div className={`overflow-hidden transition-[max-height] ${searchOpen ? "max-h-14" : "max-h-0"}`}>
+      <div className="px-3">
+        <button
+          onClick={() => newThread()}
+          className="mb-2 flex w-full items-center gap-2 rounded-lg border border-line bg-surface
+            px-3 py-2 text-[14px] transition hover:border-brand hover:text-brand"
+        >
+          <span className="text-brand">＋</span> 新对话
+        </button>
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="搜索对话..."
-          className="mb-2 w-full rounded-[10px] border border-line bg-wash px-3 py-2 outline-none"
+          placeholder="搜索对话"
+          className="mb-1 w-full rounded-lg bg-surface px-3 py-1.5 text-[13px] outline-none
+            placeholder:text-muted focus:ring-1 focus:ring-brand/30"
         />
       </div>
 
-      <button
-        onClick={() => newThread()}
-        className="mb-1.5 rounded-[10px] bg-ink px-3 py-2.5 text-left font-medium text-white transition hover:opacity-90"
-      >
-        ＋ 新对话
-      </button>
-
-      <div className="mt-3 min-h-0 flex-1 overflow-y-auto">
-        <p className="px-1.5 pb-1.5 text-xs text-muted">最近</p>
-        {list.length === 0 && <p className="px-1.5 text-[13px] text-muted">还没有对话</p>}
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+        {list.length === 0 && (
+          <p className="px-2 py-3 text-[13px] text-muted">{q ? "没有匹配的对话" : "还没有对话"}</p>
+        )}
         {list.map((t) => (
           <div
             key={t.id}
             onClick={() => selectThread(t.id)}
-            className={`group flex cursor-pointer items-center gap-2 rounded-[9px] px-2.5 py-2 text-sm
-              ${t.id === currentThreadId ? "bg-[#eef3ff] text-brand" : "text-[#3a3a45] hover:bg-wash"}`}
+            className={`group flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-[13.5px]
+              ${
+                t.id === currentThreadId
+                  ? "bg-brand-soft text-ink"
+                  : "text-muted hover:bg-line/60 hover:text-ink"
+              }`}
           >
-            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand" />
             <span className="flex-1 truncate">{t.title}</span>
             <button
               title="删除"
@@ -92,7 +82,7 @@ export function ThreadPanel({ open }: { open: boolean }) {
                 e.stopPropagation();
                 deleteThread(t.id);
               }}
-              className="shrink-0 text-muted opacity-0 transition group-hover:opacity-100 hover:text-ink"
+              className="shrink-0 opacity-0 transition group-hover:opacity-100 hover:text-brand"
             >
               ×
             </button>

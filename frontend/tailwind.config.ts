@@ -12,9 +12,12 @@ export default {
         line: "var(--line)",
         surface: "var(--surface)",
         wash: "var(--wash)",
+        sand: "var(--sand)",
         brand: "var(--brand)",
+        "brand-soft": "var(--brand-soft)",
       },
-      borderRadius: { card: "14px" },
+      borderRadius: { card: "12px" },
+      maxWidth: { reading: "740px" }, // 正文阅读宽度
     },
   },
   plugins: [],

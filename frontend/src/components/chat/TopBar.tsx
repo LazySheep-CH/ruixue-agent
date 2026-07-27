@@ -25,23 +25,23 @@ export function TopBar() {
   }, []);
 
   return (
-    <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-line bg-surface px-4.5 px-5">
-      <b className="font-semibold">瑞雪地膜智能助手</b>
+    <div className="flex h-13 shrink-0 items-center gap-2.5 border-b border-line px-5 py-3">
+      <b className="text-[15px] font-medium">瑞雪地膜智能助手</b>
       <span className="text-[13px] text-muted">降解率 · 保墒 · 力学 · 用量</span>
 
       <span
         title={online ? "后端在线" : "后端未连接"}
         className={`ml-1 h-1.5 w-1.5 rounded-full ${
-          online === null ? "bg-[#d9d9e2]" : online ? "bg-[#12a150]" : "bg-[#d33]"
+          online === null ? "bg-[#d9d9e2]" : online ? "bg-brand" : "bg-[#d33]"
         }`}
       />
 
       <div className="relative ml-auto">
         <button
           onClick={() => setMenuOpen((v) => !v)}
-          className="flex items-center gap-2 rounded-lg border border-line px-2.5 py-1.5 text-[13px] hover:bg-wash"
+          className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] hover:bg-sand"
         >
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#e8e8ef] text-[11px] text-muted">
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand text-[11px] text-white">
             {username.slice(0, 1).toUpperCase() || "?"}
           </span>
           <span className="max-w-[90px] truncate">{username || "未登录"}</span>
@@ -54,7 +54,7 @@ export function TopBar() {
                 clearAuth();
                 router.replace("/login");
               }}
-              className="w-full px-3.5 py-2.5 text-left text-[13px] hover:bg-wash"
+              className="w-full px-3.5 py-2.5 text-left text-[13px] hover:bg-sand"
             >
               退出登录
             </button>
