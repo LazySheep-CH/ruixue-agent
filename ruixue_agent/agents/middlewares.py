@@ -14,6 +14,7 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import SystemMessage, ToolMessage
 
 from ruixue_agent.guardrails.injection import REINFORCE_NOTICE, detect_injection
+from ruixue_agent.skills import render_skills
 
 logger = logging.getLogger("ruixue.agent")
 
@@ -68,6 +69,33 @@ class PromptInjectionGuardMiddleware(AgentMiddleware):
         logger.warning("检测到疑似提示注入: %s", threats)
         # 追加一条系统消息重申边界(不改用户原文,便于排查时看到真实输入)
         return {"messages": [SystemMessage(content=REINFORCE_NOTICE)]}
+
+
+class SkillInjectionMiddleware(AgentMiddleware):
+    """按场景注入【作业规程(技能)】:告诉模型"这类问题该怎么做"。
+
+    工具解决"能做什么",技能解决"该怎么做"——领域经验(先看生育期、三项指标
+    如何权衡、有哪些坑)写死在系统提示会越堆越长、稀释注意力;写进代码更糟,
+    因为它要由领域专家反复迭代。故做成 skills/*.md,按关键词命中才注入。
+
+    只在【首轮】注入:同一会话里规程不必反复重申,省 token。
+    """
+
+    def before_model(self, state, runtime):
+        messages = state.get("messages") or []
+        if not messages:
+            return None
+        last = messages[-1]
+        if type(last).__name__ != "HumanMessage":
+            return None
+        # 首轮判定:此前没有任何模型回复 → 这是本会话第一个问题
+        if any(type(m).__name__ == "AIMessage" for m in messages[:-1]):
+            return None
+        text = render_skills(str(last.content))
+        if not text:
+            return None
+        logger.info("注入作业规程(技能)")
+        return {"messages": [SystemMessage(content=text)]}
 
 
 class ToolErrorHandlingMiddleware(AgentMiddleware):
