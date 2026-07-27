@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { AuthGuard } from "~/components/AuthGuard";
 import { Composer } from "~/components/chat/Composer";
 import { MessageList } from "~/components/chat/MessageList";
 import { Rail, ThreadPanel } from "~/components/chat/Sidebar";
@@ -33,6 +34,7 @@ export default function ChatPage() {
   };
 
   return (
+    <AuthGuard>
     <div className="flex h-screen">
       <Rail onToggle={() => setPanelOpen((v) => !v)} />
       <ThreadPanel open={panelOpen} />
@@ -59,5 +61,6 @@ export default function ChatPage() {
         </div>
       )}
     </div>
+    </AuthGuard>
   );
 }

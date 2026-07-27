@@ -4,6 +4,7 @@
  * (要带 body 和 X-API-Key)。所以用 fetch + ReadableStream 手动解析 SSE。
  */
 
+import { getToken } from "./auth";
 import type { StreamEvent } from "./types";
 
 /** 开发期走 Next 的 rewrites 代理到 FastAPI(见 next.config.mjs),故用相对路径。 */
@@ -20,7 +21,7 @@ export class ApiError extends Error {
 
 /** HTTP 状态 → 用户能看懂的中文提示。 */
 function humanize(status: number): string {
-  if (status === 401) return "API Key 无效或未设置";
+  if (status === 401) return "登录已过期,请重新登录";
   if (status === 429) return "请求过于频繁,请稍后再试";
   if (status === 422) return "输入过长或格式不正确";
   if (status >= 500) return "服务暂时不可用,请稍后重试";
@@ -32,7 +33,7 @@ function humanize(status: number): string {
  * signal 用于取消(用户点"停止"或切走页面)。
  */
 export async function streamChat(
-  params: { threadId: string; message: string; apiKey: string },
+  params: { threadId: string; message: string },
   onEvent: (e: StreamEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
@@ -40,7 +41,7 @@ export async function streamChat(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-API-Key": params.apiKey,
+      Authorization: `Bearer ${getToken()}`,
     },
     body: JSON.stringify({ thread_id: params.threadId, message: params.message }),
     signal,

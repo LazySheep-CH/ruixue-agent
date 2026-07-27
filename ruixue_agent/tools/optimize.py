@@ -12,7 +12,6 @@ from ruixue_agent.predictors.environment import get_environment
 from ruixue_agent.predictors.optimize import (
     DEFAULT_PBAT_OPTIONS,
     DEFAULT_THICKNESS_UM,
-    THICKNESS_RESOLUTION_UM,
     format_table,
     screen_recipes,
 )
@@ -35,9 +34,10 @@ def screen_film_recipes(place: str, days: int, thickness_um: float = DEFAULT_THI
         return env["reason"]
     rows = screen_recipes(env["features"], days, thickness_um=thickness_um)
     note = (
-        f"局限:训练数据以较厚薄膜为主(中位 57~616µm),实际地膜 8~15µm 属外推,"
-        f"模型对 {THICKNESS_RESOLUTION_UM:.0f}µm 以下厚度无分辨力 —— "
-        f"本表固定厚度 {thickness_um:.0f}µm,只比较【配方】差异,不要据此调厚度。"
+        f"局限:原始数据混入了非薄膜样本(ISO527 拉伸样条等,已在训练时按厚度筛除),"
+        f"但薄膜样本仍稀疏 —— 模型对厚度的响应不单调、在 8~15µm 区间几乎无变化。"
+        f"故本表固定厚度 {thickness_um:.0f}µm,【只比较配方差异,不要据此调厚度】。"
+        f"厚度对性能的真实影响请参考国标与文献(数据层面:膜越厚越保墒,符合 Fick 定律)。"
     )
     return (
         f"{env['place']} · {env['period']} · 候选 PBAT {list(DEFAULT_PBAT_OPTIONS)}%"

@@ -22,6 +22,7 @@ from slowapi.util import get_remote_address
 from ruixue_agent.agents import create_ruixue_agent
 from ruixue_app.auth import get_current_user
 from ruixue_app.observability import RequestIdMiddleware, configure_logging
+from ruixue_app.routes import auth as auth_routes
 
 # 用带 request_id 的结构化日志格式,替代默认的 logging.basicConfig。
 configure_logging()
@@ -67,7 +68,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type", "X-API-Key", "X-Request-ID"],
+    allow_headers=["Content-Type", "Authorization", "X-API-Key", "X-Request-ID"],
     expose_headers=["X-Request-ID"],  # 让前端能读到请求编号,便于报障
 )
 
@@ -85,6 +86,10 @@ limiter = Limiter(key_func=_rate_key)  # 限流器,按 _rate_key 区分不同调
 app.state.limiter = limiter  # 挂到 app 上(slowapi 要求)
 # 超过限额时,自动返回 429 Too Many Requests(不用我们自己写)
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+# 认证路由:注册 / 登录 / 查当前用户
+app.include_router(auth_routes.router)
 
 
 # ── 全局异常兜底(错误脱敏)────────────────────────────────────
