@@ -7,12 +7,12 @@
 
 import json
 import logging
+import os
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, StreamingResponse
 from langchain_core.messages import AIMessageChunk
 from pydantic import BaseModel, Field
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -54,6 +54,22 @@ app = FastAPI(title="瑞雪地膜智能助手", lifespan=lifespan)
 # 请求追踪:每个请求发一个 request_id,贯穿日志、回写响应头。
 # 这是【HTTP 层】的中间件(套在整个请求外),和 agent 里的中间件是同一思想、不同层。
 app.add_middleware(RequestIdMiddleware)
+
+# 跨域(CORS):前端是独立工程(frontend/),开发期由 Next 代理到这里,属同源;
+# 但前端一旦独立部署到别的域名,浏览器就会拦跨域请求 —— 故显式放行。
+# 【安全】只放行白名单来源,不用 "*"(带自定义头 X-API-Key 时 "*" 也不合法)。
+ALLOWED_ORIGINS = [
+    o.strip()
+    for o in os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
+    if o.strip()
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "X-API-Key", "X-Request-ID"],
+    expose_headers=["X-Request-ID"],  # 让前端能读到请求编号,便于报障
+)
 
 
 # ── 限流(Rate Limiting)────────────────────────────────────────
@@ -190,16 +206,3 @@ def chat_stream(
                 yield f"data: {payload}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
-
-
-# ── 前端页面(同源托管:免 CORS,一条命令即可访问)────────────────
-# 放在文件末尾:先注册所有 API 路由,再挂静态,避免根路径抢占 /chat 等端点。
-_STATIC = Path(__file__).parent / "static"
-if _STATIC.is_dir():
-
-    @app.get("/", include_in_schema=False)
-    def index():
-        """聊天页面。浏览器打开 http://127.0.0.1:8000/ 即可使用。"""
-        return FileResponse(_STATIC / "index.html")
-
-    app.mount("/static", StaticFiles(directory=_STATIC), name="static")
