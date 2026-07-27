@@ -36,13 +36,23 @@ class MilvusVectorStore:
     # ── 建表 ──────────────────────────────────────────
 
     def ensure_collection(self, index_type: str = "FLAT") -> None:
-        """创建 collection,已存在则跳过(启动时幂等调用)。
+        """创建 collection(启动时幂等调用);已存在但【缺索引】时自愈补建。
 
         默认 FLAT(暴力检索):结果是精确真值,可作为评测 HNSW 等近似索引
         召回率的基准;22 万级数据量下延迟已满足需求。换索引类型只需
         drop 后重建,向量无需重算。
+
+        为什么不只判断"表在不在":表存在【不代表】索引存在 —— 若上次运行在建表
+        与建索引之间中断,会留下"有表无索引"的残留,此时旧写法直接 return,
+        后续 search 报 `index not found`(实测踩到过)。故这里额外校验索引。
         """
         if self.client.has_collection(self.collection):
+            try:
+                if "vector" in set(self.client.list_indexes(self.collection)):
+                    return  # 表和索引都在,正常路径
+            except Exception:
+                pass  # 查索引失败一律按"缺索引"处理,走下面补建
+            self._create_indexes(index_type)  # 有表无索引 → 补建,自愈
             return
 
         schema = MilvusClient.create_schema(auto_id=False)
@@ -53,8 +63,14 @@ class MilvusVectorStore:
         schema.add_field("year", DataType.INT64, nullable=True)
         schema.add_field("source", DataType.VARCHAR, max_length=32, nullable=True)
 
-        index_params = MilvusClient.prepare_index_params()
-        index_params.add_index(
+        self.client.create_collection(
+            self.collection, schema=schema, index_params=self._index_params(index_type)
+        )
+
+    def _index_params(self, index_type: str):
+        """索引定义(建表与自愈补建共用,避免两处写法漂移)。"""
+        p = MilvusClient.prepare_index_params()
+        p.add_index(
             field_name="vector",
             index_type=index_type,
             # 向量在 embed 时已归一化,点积等价余弦;显式用 COSINE 而非 IP,
@@ -62,10 +78,14 @@ class MilvusVectorStore:
             metric_type="COSINE",
         )
         # 过滤字段建标量索引,前过滤才不退化为全扫
-        index_params.add_index(field_name="year")
-        index_params.add_index(field_name="source")
+        p.add_index(field_name="year")
+        p.add_index(field_name="source")
+        return p
 
-        self.client.create_collection(self.collection, schema=schema, index_params=index_params)
+    def _create_indexes(self, index_type: str) -> None:
+        """给已存在的 collection 补建索引(自愈路径)。"""
+        self.client.create_index(self.collection, self._index_params(index_type))
+        self.client.load_collection(self.collection)  # 索引建好要 load 才能搜
 
     def drop(self) -> None:
         if self.client.has_collection(self.collection):

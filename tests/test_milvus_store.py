@@ -72,6 +72,33 @@ def test_ensure_collection_is_idempotent(store):
     assert _TEST_COLLECTION in store.client.list_collections()
 
 
+def test_ensure_collection_self_heals_missing_index(store):
+    """【回归】表存在但【缺索引】时,ensure_collection 要能自愈补建。
+
+    踩过的坑:旧实现只判断 has_collection 就 return —— 若上次运行在建表与建索引
+    之间中断,会留下"有表无索引"的残留,后续 search 报 `index not found`,
+    而且这种残留会一直卡住,直到手工 drop。故这里人为制造坏状态验证自愈。
+    """
+    from pymilvus import DataType, MilvusClient
+
+    from ruixue_agent.rag.milvus_store import _DIM
+
+    store.drop()
+    schema = MilvusClient.create_schema(auto_id=False)
+    schema.add_field("chunk_id", DataType.VARCHAR, is_primary=True, max_length=64)
+    schema.add_field("vector", DataType.FLOAT_VECTOR, dim=_DIM)
+    schema.add_field("year", DataType.INT64, nullable=True)
+    schema.add_field("source", DataType.VARCHAR, max_length=32, nullable=True)
+    store.client.create_collection(_TEST_COLLECTION, schema=schema)  # 故意不建索引
+    assert store.client.list_indexes(_TEST_COLLECTION) == []  # 确认坏状态造出来了
+
+    store.ensure_collection()  # 自愈
+
+    assert "vector" in set(store.client.list_indexes(_TEST_COLLECTION))
+    store.index(_rows())
+    assert store.search("地膜", k=1)  # 能真正搜出来,不再 index not found
+
+
 def test_schema_has_filter_fields(store):
     """year/source 必须在 Milvus 里 —— 否则只能【后过滤】:
     先搜 top10 再筛 2020 年后的,可能筛完剩 0 条。

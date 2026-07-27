@@ -100,8 +100,14 @@ def test_register_login_and_me():
         == 409
     )
     # 正确密码 → 200;错误密码 → 401
-    assert client.post("/auth/login", json={"username": name, "password": "ruixue123"}).status_code == 200
-    assert client.post("/auth/login", json={"username": name, "password": "nope12345"}).status_code == 401
+    assert (
+        client.post("/auth/login", json={"username": name, "password": "ruixue123"}).status_code
+        == 200
+    )
+    assert (
+        client.post("/auth/login", json={"username": name, "password": "nope12345"}).status_code
+        == 401
+    )
 
     # 用令牌查自己
     me = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
@@ -128,12 +134,20 @@ def test_two_users_get_different_namespaces():
         name = _username() + "x"
         r = client.post("/auth/register", json={"username": name, "password": "ruixue123"})
         tok = r.json()["access_token"]
-        ids.append(client.get("/auth/me", headers={"Authorization": f"Bearer {tok}"}).json()["user_id"])
+        ids.append(
+            client.get("/auth/me", headers={"Authorization": f"Bearer {tok}"}).json()["user_id"]
+        )
         time.sleep(0.002)
     assert ids[0] != ids[1]
 
 
 @needs_db
 def test_short_username_or_password_rejected():
-    assert client.post("/auth/register", json={"username": "ab", "password": "ruixue123"}).status_code == 422
-    assert client.post("/auth/register", json={"username": _username(), "password": "123"}).status_code == 422
+    assert (
+        client.post("/auth/register", json={"username": "ab", "password": "ruixue123"}).status_code
+        == 422
+    )
+    assert (
+        client.post("/auth/register", json={"username": _username(), "password": "123"}).status_code
+        == 422
+    )
