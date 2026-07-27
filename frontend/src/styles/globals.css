@@ -2,14 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 设计变量:改配色只改这里(tailwind.config.ts 引用了这些名字)。 */
+/* ── 设计变量:成熟编码 agent 风格(暖米色底 + 陶土橙强调)───────────────
+   与常见的"冷灰蓝 SaaS"刻意区分:底色偏暖、对比柔和、长时间阅读不刺眼。
+   改配色只改这里(tailwind.config.ts 引用这些名字)。 */
 :root {
-  --ink: #11111a; /* 主文字 */
-  --muted: #777783; /* 次要文字 */
-  --line: #ececf1; /* 分割线/边框 */
-  --surface: #ffffff; /* 卡片/面板底 */
-  --wash: #f8f8fb; /* 页面底 */
-  --brand: #2f75ff; /* 强调色 */
+  --ink: #1f1e1d; /* 主文字:暖黑,不是纯黑 */
+  --muted: #6b6a65; /* 次要文字 */
+  --line: #e8e5dd; /* 分割线:暖灰 */
+  --surface: #ffffff; /* 卡片/输入框 */
+  --wash: #faf9f5; /* 页面底:米白 */
+  --sand: #f2efe6; /* 次级底(侧栏/用户消息块) */
+  --brand: #d97757; /* 强调:陶土橙 */
+  --brand-soft: #f7ede8; /* 强调的浅底 */
 }
 
 html,
@@ -20,24 +24,28 @@ body {
   background: var(--wash);
   color: var(--ink);
   font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-  font-size: 15px;
-  line-height: 1.6;
-  overflow: hidden; /* 应用式布局:各面板内部滚动,页面本身不滚 */
+    ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei",
+    sans-serif;
+  font-size: 15.5px;
+  line-height: 1.72; /* 宽松行距:长文可读性 */
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* 消息正文里的 markdown 元素样式(内容由 renderMarkdown 生成) */
+/* ── 消息正文:整块流式排版,不是气泡 ────────────────────────── */
 .prose-msg {
   white-space: pre-wrap;
   word-break: break-word;
 }
+.prose-msg > * + * {
+  margin-top: 0.75em;
+}
 .prose-msg code {
-  background: var(--wash);
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  padding: 1px 5px;
-  font-size: 13px;
-  font-family: ui-monospace, Menlo, Consolas, monospace;
+  background: var(--sand);
+  border-radius: 4px;
+  padding: 1.5px 5px;
+  font-size: 13.5px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 .prose-msg strong {
   font-weight: 600;
@@ -45,7 +53,7 @@ body {
 .prose-msg table {
   border-collapse: collapse;
   width: 100%;
-  margin: 10px 0;
+  margin: 12px 0;
   font-size: 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -54,11 +62,11 @@ body {
 .prose-msg th,
 .prose-msg td {
   border-bottom: 1px solid var(--line);
-  padding: 8px 12px;
+  padding: 9px 13px;
   text-align: left;
 }
 .prose-msg th {
-  background: var(--wash);
+  background: var(--sand);
   font-weight: 600;
   font-size: 13px;
   color: var(--muted);
@@ -74,24 +82,43 @@ body {
     opacity: 1;
   }
   50% {
-    opacity: 0;
+    opacity: 0.15;
   }
 }
 .cursor::after {
-  content: "▍";
-  animation: blink 1s step-end infinite;
-  color: var(--muted);
-  margin-left: 1px;
+  content: "●";
+  font-size: 9px;
+  vertical-align: 2px;
+  animation: blink 1.1s ease-in-out infinite;
+  color: var(--brand);
+  margin-left: 3px;
+}
+
+/* 工具运行中的呼吸点 */
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.running {
+  animation: pulse-dot 1.3s ease-in-out infinite;
 }
 
 /* 细滚动条 */
 *::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
 }
 *::-webkit-scrollbar-thumb {
-  background: #dcdce4;
-  border-radius: 4px;
+  background: #d9d5c9;
+  border-radius: 5px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #c9c4b5;
 }
 *::-webkit-scrollbar-track {
   background: transparent;

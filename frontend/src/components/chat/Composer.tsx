@@ -27,15 +27,15 @@ export function Composer({
   }, [value]);
 
   return (
-    <div className="bg-gradient-to-b from-transparent to-wash px-4 pb-5 pt-3.5">
+    <div className="bg-gradient-to-b from-transparent to-wash px-6 pb-5 pt-3">
       <form
         onSubmit={(e) => {
           e.preventDefault();
           onSend();
         }}
-        className="mx-auto flex max-w-[760px] items-end gap-2 rounded-card border border-line bg-surface
-          px-3 py-2.5 shadow-[0_2px_10px_rgba(17,17,26,.04)] focus-within:border-[#c9d8ff]
-          focus-within:shadow-[0_0_0_3px_rgba(47,117,255,.08)]"
+        className="mx-auto flex max-w-reading items-end gap-2 rounded-card border border-line bg-surface
+          px-3.5 py-2.5 transition focus-within:border-brand/50
+          focus-within:shadow-[0_0_0_3px_rgba(217,119,87,.10)]"
       >
         <textarea
           ref={ref}
@@ -56,7 +56,7 @@ export function Composer({
             type="button"
             onClick={onStop}
             title="停止生成"
-            className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px] bg-ink text-white"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand text-[11px] text-white"
           >
             ■
           </button>
@@ -65,14 +65,15 @@ export function Composer({
             type="submit"
             disabled={!value.trim()}
             title="发送"
-            className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px]
-              bg-ink text-white transition disabled:cursor-not-allowed disabled:bg-[#d9d9e2]"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand
+              text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-line
+              disabled:text-muted"
           >
             ↑
           </button>
         )}
       </form>
-      <p className="mx-auto mt-2 max-w-[760px] text-center text-xs text-muted">
+      <p className="mx-auto mt-2 max-w-reading text-center text-xs text-muted">
         回车发送 · Shift+回车换行 · 结果由模型生成,仅供参考
       </p>
     </div>

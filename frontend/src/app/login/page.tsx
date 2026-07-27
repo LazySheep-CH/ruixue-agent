@@ -34,7 +34,7 @@ export default function LoginPage() {
     <div className="flex h-screen items-center justify-center bg-wash px-4">
       <div className="w-full max-w-[380px]">
         <div className="mb-7 text-center">
-          <div className="mx-auto mb-4 h-12 w-12 rounded-[14px] bg-gradient-to-br from-brand to-[#7aa2ff]" />
+          <div className="mx-auto mb-4 h-12 w-12 rounded-[14px] bg-brand" />
           <h1 className="text-[22px] font-semibold">瑞雪地膜智能助手</h1>
           <p className="mt-1 text-[13px] text-muted">知识问答 · 性能预测 · 用量估算</p>
         </div>
@@ -67,7 +67,7 @@ export default function LoginPage() {
             autoComplete="username"
             placeholder="至少 3 个字符"
             className="mb-3.5 w-full rounded-[10px] border border-line bg-wash px-3 py-2.5 outline-none
-              focus:border-[#c9d8ff] focus:bg-surface"
+              focus:border-brand/50 focus:bg-surface"
           />
 
           <label className="mb-1.5 block text-[13px] text-muted">密码</label>
@@ -78,7 +78,7 @@ export default function LoginPage() {
             autoComplete={isRegister ? "new-password" : "current-password"}
             placeholder="至少 6 个字符"
             className="w-full rounded-[10px] border border-line bg-wash px-3 py-2.5 outline-none
-              focus:border-[#c9d8ff] focus:bg-surface"
+              focus:border-brand/50 focus:bg-surface"
           />
 
           {error && <p className="mt-3 text-[13px] text-[#d33]">{error}</p>}
@@ -86,8 +86,8 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={busy || !username.trim() || !password}
-            className="mt-5 w-full rounded-[10px] bg-ink py-2.5 font-medium text-white transition
-              hover:opacity-90 disabled:cursor-not-allowed disabled:bg-[#d9d9e2]"
+            className="mt-5 w-full rounded-[10px] bg-brand py-2.5 font-medium text-white transition
+              hover:opacity-90 disabled:cursor-not-allowed disabled:bg-line disabled:text-muted"
           >
             {busy ? "处理中…" : isRegister ? "注册并进入" : "登录"}
           </button>
