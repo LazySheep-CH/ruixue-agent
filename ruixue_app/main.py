@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
-from langchain_core.messages import AIMessageChunk
+from langchain_core.messages import AIMessageChunk, ToolMessage
 from pydantic import BaseModel, Field
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -22,6 +22,7 @@ from slowapi.util import get_remote_address
 from ruixue_agent.agents import create_ruixue_agent
 from ruixue_app.auth import get_current_user
 from ruixue_app.observability import RequestIdMiddleware, configure_logging
+from ruixue_app.routes import auth as auth_routes
 
 # 用带 request_id 的结构化日志格式,替代默认的 logging.basicConfig。
 configure_logging()
@@ -67,7 +68,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type", "X-API-Key", "X-Request-ID"],
+    allow_headers=["Content-Type", "Authorization", "X-API-Key", "X-Request-ID"],
     expose_headers=["X-Request-ID"],  # 让前端能读到请求编号,便于报障
 )
 
@@ -85,6 +86,10 @@ limiter = Limiter(key_func=_rate_key)  # 限流器,按 _rate_key 区分不同调
 app.state.limiter = limiter  # 挂到 app 上(slowapi 要求)
 # 超过限额时,自动返回 429 Too Many Requests(不用我们自己写)
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+# 认证路由:注册 / 登录 / 查当前用户
+app.include_router(auth_routes.router)
 
 
 # ── 全局异常兜底(错误脱敏)────────────────────────────────────
@@ -187,16 +192,38 @@ def chat_stream(
     config = {"configurable": {"thread_id": thread_id}}
 
     def event_generator():
+        announced: set[str] = set()  # 已通知"开始"的工具,避免流式分片重复推
+        seen_tools: set[str] = set()
         # _meta 用不到,用下划线开头表示"我知道它在,但故意不用"(避免 lint 报未用变量)
         for chunk, _meta in _agent.stream(
             {"messages": [{"role": "user", "content": req.message}]},
             config=config,
             stream_mode="messages",
         ):
-            # 只推【模型说的话】。stream_mode="messages" 也会推 ToolMessage(工具返回的
-            # 原文),那是给模型看的中间结果,推给用户会造成"工具原文 + 正式回答"重复。
+            # 工具【执行完毕】:ToolMessage 带工具名。只报"哪个工具跑完了",
+            # 不把工具返回的原文推给用户(那是给模型看的中间结果,会和正式回答重复)。
+            if isinstance(chunk, ToolMessage):
+                if chunk.name and chunk.name not in seen_tools:
+                    seen_tools.add(chunk.name)
+                payload = json.dumps(
+                    {"type": "tool_end", "name": chunk.name or ""}, ensure_ascii=False
+                )
+                yield f"data: {payload}\n\n"
+                continue
+
             if not isinstance(chunk, AIMessageChunk):
                 continue
+
+            # 工具【开始调用】:模型决定用某工具时,tool_call_chunks 里会陆续带出名字。
+            # 前端据此显示"正在检索知识库…"这类进度 —— agent 产品的核心体验:
+            # 让用户看见它在做什么,而不是干等一个黑盒。
+            for tc in chunk.tool_call_chunks or []:
+                name = tc.get("name")
+                if name and name not in announced:
+                    announced.add(name)
+                    payload = json.dumps({"type": "tool_start", "name": name}, ensure_ascii=False)
+                    yield f"data: {payload}\n\n"
+
             reasoning = chunk.additional_kwargs.get("reasoning_content")
             if reasoning:
                 payload = json.dumps({"type": "thinking", "text": reasoning}, ensure_ascii=False)
