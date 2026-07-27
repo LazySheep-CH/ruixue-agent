@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>瑞雪地膜智能助手</title>
+<style>
+:root{
+  --ink:#11111a; --muted:#777783; --line:#ececf1; --surface:#fff; --wash:#f8f8fb;
+  --blue:#2f75ff; --green:#12a150; --rail:74px; --panel:276px; --radius:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  color:var(--ink); background:var(--wash); height:100vh; overflow:hidden;
+}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input,textarea{font:inherit;color:inherit}
+
+/* 首屏渐显 */
+.app{display:flex;height:100vh;opacity:0;transform:translateY(6px);
+  transition:opacity .5s ease,transform .5s ease}
+.app.ready{opacity:1;transform:none}
+
+/* ① 左侧图标条 */
+.rail{width:var(--rail);flex:0 0 var(--rail);background:var(--surface);
+  border-right:1px solid var(--line);display:flex;flex-direction:column;
+  align-items:center;padding:14px 0;gap:6px}
+.orb{width:32px;height:32px;border-radius:10px;
+  background:linear-gradient(135deg,var(--blue),#7aa2ff);margin-bottom:14px}
+.rail-btn{width:44px;height:44px;border-radius:12px;font-size:17px;color:var(--muted);
+  display:flex;align-items:center;justify-content:center;transition:.18s}
+.rail-btn:hover{background:var(--wash);color:var(--ink)}
+.rail-btn.active{background:#eef3ff;color:var(--blue)}
+.rail .spacer{flex:1}
+.avatar{width:34px;height:34px;border-radius:50%;background:#e8e8ef;
+  font-size:12px;font-weight:600;color:var(--muted);
+  display:flex;align-items:center;justify-content:center}
+
+/* ② 对话历史面板(可折叠) */
+.panel{width:var(--panel);flex:0 0 var(--panel);background:var(--surface);
+  border-right:1px solid var(--line);display:flex;flex-direction:column;padding:14px 12px;
+  transition:margin-left .28s ease}
+.panel.hidden{margin-left:calc(-1 * var(--panel))}
+.panel-head{display:flex;align-items:center;justify-content:space-between;
+  padding:0 4px 10px;font-weight:600}
+.icon-btn{width:30px;height:30px;border-radius:8px;color:var(--muted);font-size:15px}
+.icon-btn:hover{background:var(--wash)}
+.search{max-height:0;overflow:hidden;transition:max-height .25s ease}
+.search.open{max-height:52px}
+.search input{width:100%;padding:8px 12px;border:1px solid var(--line);
+  border-radius:10px;background:var(--wash);outline:none;margin-bottom:8px}
+.new-chat{width:100%;padding:10px 12px;border-radius:10px;background:var(--ink);
+  color:#fff;font-weight:500;text-align:left;margin-bottom:6px;transition:.18s}
+.new-chat:hover{opacity:.88}
+.hist-group{margin-top:14px}
+.hist-group p{font-size:12px;color:var(--muted);padding:0 6px 6px}
+.hist-item{width:100%;text-align:left;padding:8px 10px;border-radius:9px;
+  font-size:14px;color:#3a3a45;display:flex;align-items:center;gap:8px;
+  overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.hist-item:hover{background:var(--wash)}
+.hist-item.on{background:#eef3ff;color:var(--blue)}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--blue);flex:0 0 6px}
+
+/* ③ 主聊天区 */
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.topbar{height:56px;flex:0 0 56px;border-bottom:1px solid var(--line);background:var(--surface);
+  display:flex;align-items:center;gap:10px;padding:0 18px}
+.topbar b{font-weight:600}
+.topbar .sub{color:var(--muted);font-size:13px}
+.key-btn{margin-left:auto;font-size:13px;color:var(--muted);padding:6px 12px;
+  border:1px solid var(--line);border-radius:8px}
+.key-btn:hover{background:var(--wash)}
+.key-btn.set{color:var(--green);border-color:#cdebd9}
+
+.scroll{flex:1;overflow-y:auto;padding:28px 18px}
+.wrap{max-width:760px;margin:0 auto}
+
+/* 欢迎页 */
+.hero{text-align:center;padding:56px 0 30px}
+.hero h1{font-size:28px;font-weight:600;margin-bottom:8px}
+.hero p{color:var(--muted)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(228px,1fr));gap:10px;margin-top:26px}
+.card{text-align:left;padding:14px 16px;border:1px solid var(--line);border-radius:var(--radius);
+  background:var(--surface);transition:.18s}
+.card:hover{border-color:#d6d6e0;transform:translateY(-1px);box-shadow:0 4px 14px rgba(17,17,26,.05)}
+.card b{display:block;font-size:14px;font-weight:600;margin-bottom:3px}
+.card span{font-size:13px;color:var(--muted)}
+
+/* 消息气泡 */
+.msg{display:flex;gap:12px;margin-bottom:22px}
+.msg .who{width:30px;height:30px;flex:0 0 30px;border-radius:9px;font-size:12px;font-weight:600;
+  display:flex;align-items:center;justify-content:center}
+.msg.user .who{background:#e8e8ef;color:var(--muted)}
+.msg.bot .who{background:linear-gradient(135deg,var(--blue),#7aa2ff);color:#fff}
+.body{flex:1;min-width:0;padding-top:3px;white-space:pre-wrap;word-break:break-word}
+.think{border-left:2px solid var(--line);padding:2px 0 2px 12px;margin-bottom:10px;
+  color:var(--muted);font-size:13.5px;white-space:pre-wrap}
+.think summary{cursor:pointer;color:var(--muted);font-size:13px;list-style:none;
+  padding-bottom:4px;user-select:none}
+.body code{background:var(--wash);border:1px solid var(--line);border-radius:5px;
+  padding:1px 5px;font-size:13px;font-family:ui-monospace,Menlo,Consolas,monospace}
+.body strong{font-weight:600}
+.body table{border-collapse:collapse;margin:10px 0;font-size:14px;width:100%;
+  border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.body th,.body td{border-bottom:1px solid var(--line);padding:8px 12px;text-align:left}
+.body th{background:var(--wash);font-weight:600;font-size:13px;color:var(--muted)}
+.body tr:last-child td{border-bottom:0}
+.err{color:#d33;font-size:14px}
+.dots::after{content:"";animation:dots 1.2s steps(4,end) infinite}
+@keyframes dots{0%{content:""}25%{content:"·"}50%{content:"··"}75%{content:"···"}}
+
+/* 输入区 */
+.composer{padding:14px 18px 20px;background:linear-gradient(transparent,var(--wash) 22%)}
+.box{max-width:760px;margin:0 auto;border:1px solid var(--line);border-radius:var(--radius);
+  background:var(--surface);padding:10px 12px;display:flex;align-items:flex-end;gap:8px;
+  box-shadow:0 2px 10px rgba(17,17,26,.04)}
+.box:focus-within{border-color:#c9d8ff;box-shadow:0 0 0 3px rgba(47,117,255,.08)}
+.box textarea{flex:1;border:0;outline:none;resize:none;max-height:140px;padding:5px 2px}
+.send{width:34px;height:34px;flex:0 0 34px;border-radius:10px;background:var(--ink);color:#fff;
+  display:flex;align-items:center;justify-content:center;transition:.18s}
+.send:disabled{background:#d9d9e2;cursor:not-allowed}
+.hint{max-width:760px;margin:8px auto 0;font-size:12px;color:var(--muted);text-align:center}
+
+/* toast */
+.toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%) translateY(8px);
+  background:var(--ink);color:#fff;font-size:13px;padding:8px 16px;border-radius:999px;
+  opacity:0;pointer-events:none;transition:.22s}
+.toast.on{opacity:1;transform:translateX(-50%)}
+
+@media(max-width:900px){.panel{position:absolute;left:var(--rail);top:0;bottom:0;z-index:9}}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- ① 图标条 -->
+  <aside class="rail">
+    <div class="orb"></div>
+    <button class="rail-btn active" id="toggle" title="对话">◌</button>
+    <button class="rail-btn" title="知识库">▦</button>
+    <button class="rail-btn" title="预测模型">✦</button>
+    <button class="rail-btn" title="环境数据">◇</button>
+    <div class="spacer"></div>
+    <div class="avatar">瑞雪</div>
+  </aside>
+
+  <!-- ② 历史面板 -->
+  <aside class="panel" id="panel">
+    <div class="panel-head"><strong>对话</strong>
+      <button class="icon-btn" id="searchBtn" title="搜索">⌕</button>
+    </div>
+    <div class="search" id="search"><input placeholder="搜索对话..." /></div>
+    <button class="new-chat" id="newChat">＋ 新对话</button>
+    <div class="hist-group">
+      <p>最近</p>
+      <div id="histList"></div>
+    </div>
+  </aside>
+
+  <!-- ③ 主区 -->
+  <main class="main">
+    <div class="topbar">
+      <b>瑞雪地膜智能助手</b>
+      <span class="sub">降解率 · 保墒 · 力学 · 用量</span>
+      <button class="key-btn" id="keyBtn">设置 API Key</button>
+    </div>
+
+    <div class="scroll" id="scroll">
+      <div class="wrap" id="wrap">
+        <div class="hero" id="hero">
+          <h1>今天想了解地膜的什么?</h1>
+          <p>覆盖知识问答、性能预测与用量估算</p>
+          <div class="cards" id="cards"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="composer">
+      <form class="box" id="form">
+        <textarea id="input" rows="1" placeholder="问问地膜的降解、保墒、力学或用量……"></textarea>
+        <button class="send" id="send" type="submit" title="发送">↑</button>
+      </form>
+      <p class="hint">回车发送 · Shift+回车换行 · 结果由模型生成,仅供参考</p>
+    </div>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const SUGGESTIONS = [
+  ["新疆尉犁的地膜表现", "PBAT70/PLA30、10µm,盖 90 天会怎样?"],
+  ["查当地土壤", "寿光的土壤 pH 和有机质怎么样?"],
+  ["估算用量", "100 亩地用 0.01mm 生物降解膜,要多少公斤?"],
+  ["原理问答", "PBAT 地膜的降解机理是什么?"],
+];
+
+let threadId = "t" + Date.now();
+let busy = false;
+const history = [];
+
+// ── 初始化 ─────────────────────────────────────────
+setTimeout(() => $("app").classList.add("ready"), 120);
+$("cards").innerHTML = SUGGESTIONS.map(([t, q]) =>
+  `<button class="card" data-q="${q}"><b>${t}</b><span>${q}</span></button>`).join("");
+$("cards").onclick = (e) => {
+  const c = e.target.closest(".card");
+  if (c) { $("input").value = c.dataset.q; $("input").focus(); autoGrow(); }
+};
+$("toggle").onclick = () => $("panel").classList.toggle("hidden");
+$("searchBtn").onclick = () => $("search").classList.toggle("open");
+$("newChat").onclick = () => {
+  threadId = "t" + Date.now();
+  $("wrap").innerHTML = "";
+  $("wrap").appendChild($("hero").cloneNode(true));
+  toast("已开始新对话");
+};
+
+// ── API Key(存 localStorage)────────────────────────
+function getKey() { return localStorage.getItem("ruixue_key") || ""; }
+function paintKey() {
+  const k = getKey();
+  $("keyBtn").textContent = k ? "Key 已设置" : "设置 API Key";
+  $("keyBtn").classList.toggle("set", !!k);
+}
+$("keyBtn").onclick = () => {
+  const k = prompt("请输入 API Key(如 demo-key-alice):", getKey());
+  if (k !== null) { localStorage.setItem("ruixue_key", k.trim()); paintKey(); toast("已保存"); }
+};
+paintKey();
+
+function toast(text) {
+  const t = $("toast"); t.textContent = text; t.classList.add("on");
+  setTimeout(() => t.classList.remove("on"), 1800);
+}
+
+// ── 输入框自增高 ────────────────────────────────────
+function autoGrow() {
+  const el = $("input"); el.style.height = "auto";
+  el.style.height = Math.min(el.scrollHeight, 140) + "px";
+}
+$("input").addEventListener("input", autoGrow);
+$("input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("form").requestSubmit(); }
+});
+
+// ── 消息渲染 ────────────────────────────────────────
+function addMsg(role, text = "") {
+  $("hero")?.remove();
+  const el = document.createElement("div");
+  el.className = "msg " + role;
+  el.innerHTML = `<div class="who">${role === "user" ? "我" : "瑞"}</div><div class="body"></div>`;
+  el.querySelector(".body").textContent = text;
+  $("wrap").appendChild(el);
+  scrollDown();
+  return el.querySelector(".body");
+}
+function scrollDown() { $("scroll").scrollTop = $("scroll").scrollHeight; }
+
+// ── 发送 + SSE 流式接收 ─────────────────────────────
+$("form").onsubmit = async (e) => {
+  e.preventDefault();
+  const text = $("input").value.trim();
+  if (!text || busy) return;
+  if (!getKey()) { toast("请先设置 API Key"); return; }
+
+  addMsg("user", text);
+  $("input").value = ""; autoGrow();
+  busy = true; $("send").disabled = true;
+
+  // 侧栏历史
+  if (!history.includes(text)) {
+    history.unshift(text);
+    $("histList").innerHTML = history.slice(0, 8).map((h, i) =>
+      `<button class="hist-item ${i === 0 ? "on" : ""}"><span class="dot"></span>${h}</button>`).join("");
+  }
+
+  const body = addMsg("bot");
+  body.innerHTML = '<span class="dots"></span>';
+  let answer = "", thinking = "", started = false;
+
+  try {
+    const resp = await fetch("/chat/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-Key": getKey() },
+      body: JSON.stringify({ thread_id: threadId, message: text }),
+    });
+    if (!resp.ok) {
+      const msg = resp.status === 401 ? "API Key 无效或未设置"
+        : resp.status === 429 ? "请求过于频繁,请稍后再试"
+        : resp.status === 422 ? "输入过长或格式不对" : `服务异常(${resp.status})`;
+      body.innerHTML = `<span class="err">${msg}</span>`;
+      return;
+    }
+    const reader = resp.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const parts = buf.split("\n\n"); buf = parts.pop();
+      for (const p of parts) {
+        const line = p.trim();
+        if (!line.startsWith("data:")) continue;
+        let d; try { d = JSON.parse(line.slice(5).trim()); } catch { continue; }
+        if (d.type === "thinking") thinking += d.text;
+        else if (d.type === "answer") answer += d.text;
+        if (!started) { body.innerHTML = ""; started = true; }
+        body.innerHTML =
+          (thinking ? `<details class="think"><summary>思考过程</summary>${esc(thinking)}</details>` : "") +
+          md(answer);
+        scrollDown();
+      }
+    }
+    if (!answer && !thinking) body.innerHTML = '<span class="err">没有收到回复</span>';
+  } catch (err) {
+    body.innerHTML = `<span class="err">连接失败:${esc(String(err))}</span>`;
+  } finally {
+    busy = false; $("send").disabled = false; $("input").focus();
+  }
+};
+
+function esc(s) {
+  return s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+}
+
+// 极简 markdown:先转义再套标签,避免 XSS(模型输出不可全信)。
+// 支持:表格 / 加粗 / 行内代码 / 标题 / 列表 / 分隔线。
+function md(s) {
+  let t = esc(s)
+    .replace(/`([^`\n]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/^###?#?\s+(.+)$/gm, "<strong>$1</strong>")
+    .replace(/^[-*]\s+(.+)$/gm, "· $1")
+    .replace(/^\s*---+\s*$/gm, "");
+
+  // markdown 表格 → <table>(连续的 | 开头行视为一个表)
+  const lines = t.split("\n");
+  const out = [];
+  let block = [];
+  const flush = () => {
+    if (!block.length) return;
+    const rows = block
+      .filter((l) => !/^\s*\|[\s|:-]+\|\s*$/.test(l)) // 丢掉 |---|---| 分隔行
+      .map((l) => l.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim()));
+    if (rows.length) {
+      const head = rows.shift();
+      out.push(
+        "<table><thead><tr>" + head.map((c) => `<th>${c}</th>`).join("") + "</tr></thead><tbody>" +
+        rows.map((r) => "<tr>" + r.map((c) => `<td>${c}</td>`).join("") + "</tr>").join("") +
+        "</tbody></table>"
+      );
+    }
+    block = [];
+  };
+  for (const line of lines) {
+    if (/^\s*\|.*\|\s*$/.test(line)) block.push(line);
+    else { flush(); out.push(line); }
+  }
+  flush();
+  return out.join("\n");
+}
+</script>
+</body>
+</html>
