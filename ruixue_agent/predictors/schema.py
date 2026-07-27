@@ -37,6 +37,10 @@ MODELS: dict[str, dict] = {
         "paper_r2": 0.978,
         "drop_policy": "winsorize",  # DR:不删行,越界裁剪
         "impute": False,  # DR 零缺失
+        # 厚度上限:None=不筛。实测 DR 筛到 ≤200µm 后 R² 略降(0.9468→0.9451)、
+        # 且薄膜(8~15µm)分辨力【纹丝不动】—— 因为 8~20µm 只有 18 个样本(2.6%),
+        # 筛选能去噪但变不出数据。故不筛,并在工具层如实披露"厚度维度不可用"。
+        "max_thickness_um": None,
         "categorical": [],
         "fertilizer_map": None,
         "features": [
@@ -82,6 +86,9 @@ MODELS: dict[str, dict] = {
         "paper_r2": None,
         "drop_policy": "winsorize",  # WVTR:不删行,越界裁剪
         "impute": True,  # 高缺失 → MissForest 插补
+        # 厚度上限:原始数据混入了厚片/样条(1mm+),与地膜不是一类样本。
+        # 实测筛到 ≤200µm 后【双赢】:CV R² 0.8490→0.8775,薄膜分辨力 2.76→10.26。
+        "max_thickness_um": 200.0,
         # 目标填充(论文法):76 行 WVTR 目标缺失,连目标一起 MissForest 填、用全部行。
         # 这样 R² 能达标(≥0.87),但含填充标签 —— 模型卡会如实标注,并同时记录
         # "真实标签口径"R²(仅 492 行),透明可查。
@@ -122,6 +129,10 @@ MODELS: dict[str, dict] = {
         "paper_r2": None,
         "drop_policy": "drop",  # TS:允许删行(删物理不可能的)
         "impute": True,
+        # 厚度上限:TS 原始数据大量混入【ISO 527 标准拉伸样条】(1/2/4/5/6mm),
+        # 那不是膜。筛到 ≤500µm 后 R² 0.8469→0.8516(小幅提升),
+        # 但薄膜分辨力仍≈0(0.40/36MPa),故厚度维度依旧不可用。
+        "max_thickness_um": 500.0,
         # 目标填充:对齐你自己当年的 "paper_comparable"(paper_style_full_knn_target_imputed)
         # 协议 —— 整表 KNN 填目标、用全部行。含填充标签,模型卡如实披露真实标签口径。
         "impute_target": True,

@@ -210,6 +210,14 @@ def main(name: str) -> None:
             }
             df = filled
         impute_now = cfg["impute"] and disclosure is None
+    # 厚度筛选:原始数据混入了厚片/ISO527 拉伸样条(1~6mm),与地膜不是一类样本。
+    # 按模型配置的上限剔除(实证:WVTR 筛后 R² 与薄膜分辨力双升;DR 无效故不筛)。
+    max_t = cfg.get("max_thickness_um")
+    if max_t and "Thickness_um" in df.columns:
+        n0 = len(df)
+        df = df[df["Thickness_um"] <= max_t].reset_index(drop=True)
+        report["thickness_filter"] = f"≤{max_t:.0f}µm,{n0}→{len(df)} 行"
+
     X, y = df[cfg["features"]], df[cfg["target"]]
     miss_pct = 100 * X.isna().sum().sum() / (X.shape[0] * X.shape[1])
     print(f"清洗: {report}")

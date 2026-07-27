@@ -8,6 +8,7 @@ from langchain_core.tools import BaseTool
 
 from ruixue_agent.tools.calc import estimate_film_usage
 from ruixue_agent.tools.environment import get_environment_tools
+from ruixue_agent.tools.optimize import get_optimize_tools
 from ruixue_agent.tools.predictor import get_predictor_tools
 from ruixue_agent.tools.rag import search_knowledge
 
@@ -24,6 +25,7 @@ def get_tools() -> list[BaseTool]:
         search_knowledge,  # 知识库检索(Agentic RAG,带出处)
         *get_environment_tools(),  # 环境查询:土壤(离线)/ 气候(NASA 在线)
         *get_predictor_tools(),  # 性能预测:按地点综合 + 降解率/透过率/拉伸强度
+        *get_optimize_tools(),  # 配方批量试算(对比表);权衡推荐见「配方优化专家」
         # 【待做】成本估算:价格是时变+商业敏感数据,不写死在代码里。设计为
         #   成本 = 用量(kg) × 单价 —— 单价优先用用户传入(他知道本地采购价),
         #   否则读 config.yaml 的参考价(标注日期/来源)。

@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 
+import { AuthGuard } from "~/components/AuthGuard";
 import { Composer } from "~/components/chat/Composer";
 import { MessageList } from "~/components/chat/MessageList";
-import { Rail, ThreadPanel } from "~/components/chat/Sidebar";
+import { Sidebar } from "~/components/chat/Sidebar";
 import { TopBar } from "~/components/chat/TopBar";
 import { useStore } from "~/core/store";
 
@@ -33,12 +34,12 @@ export default function ChatPage() {
   };
 
   return (
+    <AuthGuard>
     <div className="flex h-screen">
-      <Rail onToggle={() => setPanelOpen((v) => !v)} />
-      <ThreadPanel open={panelOpen} />
+      <Sidebar open={panelOpen} onToggle={() => setPanelOpen((v) => !v)} />
 
       <main className="flex min-w-0 flex-1 flex-col">
-        <TopBar />
+        <TopBar onToggleSidebar={() => setPanelOpen((v) => !v)} />
         {mounted ? (
           <MessageList messages={list} onPick={setInput} />
         ) : (
@@ -54,10 +55,11 @@ export default function ChatPage() {
       </main>
 
       {toast && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 rounded-full bg-ink px-4 py-2 text-[13px] text-white">
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 rounded-full bg-ink px-4 py-2 text-[13px] text-primary-foreground shadow-lg">
           {toast}
         </div>
       )}
     </div>
+    </AuthGuard>
   );
 }

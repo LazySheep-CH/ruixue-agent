@@ -1,11 +1,19 @@
 /** 领域类型:一处定义,全站共用。 */
 
+/** agent 调用过的一个工具(用于"让用户看见它在做什么")。 */
+export interface ToolRun {
+  name: string;
+  done: boolean;
+}
+
 /** 一条消息。thinking 是模型的推理过程(可折叠),content 是正式回答。 */
 export interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
   thinking?: string;
+  /** 本轮调用过的工具及其状态 */
+  tools?: ToolRun[];
   /** 流式进行中(用于显示光标/禁用发送) */
   streaming?: boolean;
   /** 出错时的提示文案(与 content 互斥) */
@@ -22,4 +30,6 @@ export interface Thread {
 /** 后端 SSE 推送的事件(见 ruixue_app/main.py 的 /chat/stream)。 */
 export type StreamEvent =
   | { type: "thinking"; text: string }
-  | { type: "answer"; text: string };
+  | { type: "answer"; text: string }
+  | { type: "tool_start"; name: string }
+  | { type: "tool_end"; name: string };

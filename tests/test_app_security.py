@@ -7,11 +7,24 @@
 所以 _agent 是不是 None 根本不影响,测试快、稳、可进 CI。
 """
 
+import pytest
 from fastapi.testclient import TestClient
 
+import ruixue_app.auth as auth
 from ruixue_app.main import app
 
 client = TestClient(app)  # 不用 with -> 不触发 lifespan -> 不建 agent、不连库
+
+# API Key 已改为从环境变量 RUIXUE_API_KEYS 读取(不再硬编码,安全改进)。
+# 测试里注入一个临时 key,不依赖真实环境配置。
+_TEST_KEY = "test-key-alice"
+_GOOD_KEY = {"X-API-Key": _TEST_KEY}
+
+
+@pytest.fixture(autouse=True)
+def _inject_api_key(monkeypatch):
+    """给每个测试注入一个可用的 API Key(测完自动还原)。"""
+    monkeypatch.setattr(auth, "API_KEYS", {_TEST_KEY: "alice"})
 
 
 # ── 认证:没带对钥匙,进不来(P0 第①道门)──────────────────────
@@ -32,8 +45,7 @@ def test_wrong_api_key_returns_401():
 
 
 # ── 输入上限:超长直接拒(P0 第④道门,防烧 token)──────────────
-# 下面两个用【正确的钥匙】,让认证先通过,好单独验证"输入校验"这一关。
-_GOOD_KEY = {"X-API-Key": "demo-key-alice"}
+# 下面几个用【正确的钥匙】(见上方 fixture),让认证先通过,单独验证"输入校验"这一关。
 
 
 def test_message_too_long_returns_422():
