@@ -37,6 +37,8 @@ dependencies = [
     "lightgbm>=4.0",        # 预测模型:benchmark 候选(强、快)
     "tabpfn>=8.1.0",
     "shap>=0.51.0",
+    "bcrypt>=5.0.0",
+    "pyjwt>=2.8",
 ]
 
 # ── 开发依赖组 ────────────────────────────────────────────────────
@@ -73,6 +75,9 @@ select = ["E", "W", "F", "I", "UP", "B"]
 "scripts/**" = ["E402", "E501", "B007"]
 # 测试:允许长的断言消息;B017=允许 pytest.raises(Exception) 这种宽异常断言
 "tests/**" = ["E501", "B017"]
+# FastAPI 的依赖注入【必须】写在参数默认值里(Depends/Security),
+# B008"别在默认值里调函数"对它是误报 —— 官方文档就是这么写的。
+"ruixue_app/**" = ["B008"]
 
 # ── 让 torch 用上 GPU ────────────────────────────────────────────────
 # 踩过的坑:PyPI 上 Windows 的默认 torch wheel 是【CPU-only 构建】(版本号带 +cpu)。

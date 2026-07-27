@@ -7,18 +7,16 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
-import { ApiError, streamChat } from "./api";
+import { streamChat } from "./api";
 import type { Message, Thread } from "./types";
 
 interface State {
-  apiKey: string;
   threads: Thread[];
   currentThreadId: string | null;
   /** 每个会话的消息:threadId -> 消息数组 */
   messages: Record<string, Message[]>;
   sending: boolean;
 
-  setApiKey: (k: string) => void;
   newThread: () => string;
   selectThread: (id: string) => void;
   deleteThread: (id: string) => void;
@@ -35,13 +33,10 @@ let controller: AbortController | null = null;
 export const useStore = create<State>()(
   persist(
     (set, get) => ({
-      apiKey: "",
       threads: [],
       currentThreadId: null,
       messages: {},
       sending: false,
-
-      setApiKey: (k) => set({ apiKey: k.trim() }),
 
       newThread: () => {
         const t: Thread = { id: `t${Date.now()}`, title: "新对话", createdAt: Date.now() };
@@ -74,9 +69,8 @@ export const useStore = create<State>()(
       },
 
       send: async (text) => {
-        const { apiKey, sending } = get();
+        const { sending } = get();
         if (!text.trim() || sending) return;
-        if (!apiKey) throw new ApiError(401, "请先设置 API Key");
 
         // 没有当前会话就先开一个
         let threadId = get().currentThreadId;
@@ -105,14 +99,38 @@ export const useStore = create<State>()(
 
         controller = new AbortController();
         try {
-          await streamChat({ threadId, message: text, apiKey }, (e) => {
-            patch((m) =>
-              e.type === "thinking"
-                ? { ...m, thinking: (m.thinking ?? "") + e.text }
-                : { ...m, content: m.content + e.text },
-            );
-          }, controller.signal);
-          patch((m) => ({ ...m, streaming: false }));
+          await streamChat(
+            { threadId, message: text },
+            (e) => {
+              patch((m) => {
+                switch (e.type) {
+                  case "thinking":
+                    return { ...m, thinking: (m.thinking ?? "") + e.text };
+                  case "answer":
+                    return { ...m, content: m.content + e.text };
+                  case "tool_start": {
+                    const tools = m.tools ?? [];
+                    if (tools.some((t) => t.name === e.name)) return m;
+                    return { ...m, tools: [...tools, { name: e.name, done: false }] };
+                  }
+                  case "tool_end":
+                    return {
+                      ...m,
+                      tools: (m.tools ?? []).map((t) =>
+                        t.name === e.name ? { ...t, done: true } : t,
+                      ),
+                    };
+                }
+              });
+            },
+            controller.signal,
+          );
+          // 流结束:把还挂着的工具标记为完成,避免出现永远转圈的进度
+          patch((m) => ({
+            ...m,
+            streaming: false,
+            tools: (m.tools ?? []).map((t) => ({ ...t, done: true })),
+          }));
         } catch (err) {
           const aborted = err instanceof DOMException && err.name === "AbortError";
           patch((m) => ({
@@ -131,7 +149,6 @@ export const useStore = create<State>()(
       storage: createJSONStorage(() => localStorage),
       // 只持久化这三项;sending 这类瞬时状态不存
       partialize: (s) => ({
-        apiKey: s.apiKey,
         threads: s.threads,
         messages: s.messages,
         currentThreadId: s.currentThreadId,
