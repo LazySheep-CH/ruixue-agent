@@ -150,10 +150,29 @@ def _fetch_power(lon: float, lat: float, start: str, end: str) -> dict | None:
         return None
 
 
-def get_environment(place: str, days: int = 90, end_date: str | None = None) -> dict:
-    """地点 + 天数 → 可直接喂模型的环境特征 + 数据来源说明。
+def get_soil(place: str) -> dict:
+    """【土壤】地点 → 土壤特征(纯离线查表,零网络)。
 
-    days:地膜使用/埋设天数,用于把日均量换算成累计量(降水、UV)。
+    土壤属性年际变化极慢,本地 SoilGrids 与在线 API 实测同值(pH 7.9 vs 7.8),
+    故本地优先:更快、更稳,且在线偶有覆盖空洞(返回 null)。
+    """
+    loc = resolve_location(place)
+    if loc is None:
+        return {"ok": False, "reason": f"未找到地点「{place}」(需为县/区级名称)"}
+    return {
+        "ok": True,
+        "place": loc["matched"],
+        "lon": loc["lon"],
+        "lat": loc["lat"],
+        "features": loc["soil"],
+        "source": "SoilGrids 0-5cm 离线表(2898 县)",
+    }
+
+
+def get_climate(place: str, days: int = 90, end_date: str | None = None) -> dict:
+    """【气候】地点 + 天数 → 气候特征(NASA POWER 在线;失败则降级)。
+
+    days:用于把日均量换算成累计量(降水、UV —— 模型要的是累计)。
     end_date:'YYYYMMDD';默认取【去年同期结束】,保证 NASA 数据已就绪。
     """
     loc = resolve_location(place)
@@ -168,20 +187,25 @@ def get_environment(place: str, days: int = 90, end_date: str | None = None) -> 
     start = end - timedelta(days=max(days, 1) - 1)
     power = _fetch_power(loc["lon"], loc["lat"], start.strftime("%Y%m%d"), end.strftime("%Y%m%d"))
 
-    features = dict(loc["soil"])  # 土壤(离线,总是有)
-    sources = {"土壤": "SoilGrids 离线表", "气候": "NASA POWER 在线"}
-    if power:
-        features["Temperature_C"] = round(power.get("T2M", 0), 2)
-        features["Humidity"] = features["Air_Humidity_pct"] = round(power.get("RH2M", 0), 2)
-        features["solar_rad_MJm2d"] = round(power.get("ALLSKY_SFC_SW_DWN", 0), 3)
-        # 累计量:日均 × 天数
-        features["Precipitation_mm"] = round(power.get("PRECTOTCORR", 0) * days, 1)
-        if "ALLSKY_SFC_UVA" in power:
-            features["UV"] = round(power["ALLSKY_SFC_UVA"] * UV_PER_UVA_MJ * days, 0)
-        if "GWETTOP" in power:
-            features["soil_moisture_pct"] = round(power["GWETTOP"] * 100, 1)
-    else:
-        sources["气候"] = "取数失败 → 由默认值兜底"
+    if not power:
+        return {
+            "ok": False,
+            "place": loc["matched"],
+            "reason": "NASA POWER 取数失败(网络/接口异常),预测时将由默认值兜底",
+        }
+
+    f = {
+        "Temperature_C": round(power.get("T2M", 0), 2),
+        "solar_rad_MJm2d": round(power.get("ALLSKY_SFC_SW_DWN", 0), 3),
+        # 累计量:日均 × 天数(模型训练时用的就是累计)
+        "Precipitation_mm": round(power.get("PRECTOTCORR", 0) * days, 1),
+    }
+    rh = round(power.get("RH2M", 0), 2)
+    f["Humidity"] = f["Air_Humidity_pct"] = rh
+    if "ALLSKY_SFC_UVA" in power:
+        f["UV"] = round(power["ALLSKY_SFC_UVA"] * UV_PER_UVA_MJ * days, 0)
+    if "GWETTOP" in power:
+        f["soil_moisture_pct"] = round(power["GWETTOP"] * 100, 1)
 
     return {
         "ok": True,
@@ -189,6 +213,29 @@ def get_environment(place: str, days: int = 90, end_date: str | None = None) -> 
         "lon": loc["lon"],
         "lat": loc["lat"],
         "period": f"{start}~{end}({days}天)",
+        "features": f,
+        "source": "NASA POWER 在线(日尺度实况)",
+    }
+
+
+def get_environment(place: str, days: int = 90, end_date: str | None = None) -> dict:
+    """【组合】土壤 + 气候 → 一份可直接喂模型的环境特征。供按地点预测使用。"""
+    soil = get_soil(place)
+    if not soil["ok"]:
+        return soil
+    climate = get_climate(place, days, end_date)
+
+    features = dict(soil["features"])
+    sources = {"土壤": soil["source"], "气候": climate.get("source", climate.get("reason", ""))}
+    if climate["ok"]:
+        features.update(climate["features"])
+
+    return {
+        "ok": True,
+        "place": soil["place"],
+        "lon": soil["lon"],
+        "lat": soil["lat"],
+        "period": climate.get("period", f"{days}天"),
         "features": features,
         "sources": sources,
     }

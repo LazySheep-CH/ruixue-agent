@@ -5,8 +5,10 @@
 
 import pytest
 
-from ruixue_agent.predictors.environment import get_environment, resolve_location
+from ruixue_agent.predictors.environment import get_environment, get_soil, resolve_location
 from ruixue_agent.predictors.schema import UV_PER_UVA_MJ
+from ruixue_agent.tools import get_tools
+from ruixue_agent.tools.environment import get_climate_info, get_soil_info
 
 _HAS_SOIL = None
 try:
@@ -69,3 +71,27 @@ def test_climate_and_uv_calibration(place, days):
     # UV = UVA(MJ/m²/d) × 常数 × 天数,应落在训练数据量级内(0~77万)
     assert 0 < f["UV"] < 1.2e6
     assert f["UV"] / (UV_PER_UVA_MJ * days) < 5  # 反推的日 UVA 应是个位数 MJ
+
+
+# ── 土壤/气候作为【独立工具】暴露 ──────────────────────────────
+def test_soil_and_climate_tools_registered():
+    names = [t.name for t in get_tools()]
+    assert "get_soil_info" in names and "get_climate_info" in names
+
+
+def test_get_soil_is_offline_and_standalone():
+    """土壤查询纯离线:不联网也必须能返回完整结果。"""
+    r = get_soil("寿光市")
+    assert r["ok"] and "SoilGrids" in r["source"]
+    assert "Soil_pH" in r["features"]
+
+
+def test_soil_tool_output_readable():
+    txt = get_soil_info.invoke({"place": "寿光市"})
+    assert "pH" in txt and "数据源" in txt
+
+
+def test_climate_tool_handles_unknown_place():
+    """未知地点要给可读提示,不抛异常。"""
+    txt = get_climate_info.invoke({"place": "火星基地", "days": 30})
+    assert "未找到" in txt

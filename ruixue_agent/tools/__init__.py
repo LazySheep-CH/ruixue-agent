@@ -7,6 +7,7 @@
 from langchain_core.tools import BaseTool
 
 from ruixue_agent.tools.calc import estimate_film_usage
+from ruixue_agent.tools.environment import get_environment_tools
 from ruixue_agent.tools.predictor import get_predictor_tools
 from ruixue_agent.tools.rag import search_knowledge
 
@@ -21,6 +22,7 @@ def get_tools() -> list[BaseTool]:
     return [
         estimate_film_usage,  # 用量/成本计算(确定性)
         search_knowledge,  # 知识库检索(Agentic RAG,带出处)
-        *get_predictor_tools(),  # 三个性能预测:降解率/水蒸气透过率/拉伸强度
+        *get_environment_tools(),  # 环境查询:土壤(离线)/ 气候(NASA 在线)
+        *get_predictor_tools(),  # 性能预测:按地点综合 + 降解率/透过率/拉伸强度
         # web_search / query_price:待 tools/web.py 实现后加入
     ]
