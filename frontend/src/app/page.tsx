@@ -39,7 +39,7 @@ export default function ChatPage() {
       <Sidebar open={panelOpen} onToggle={() => setPanelOpen((v) => !v)} />
 
       <main className="flex min-w-0 flex-1 flex-col">
-        <TopBar />
+        <TopBar onToggleSidebar={() => setPanelOpen((v) => !v)} />
         {mounted ? (
           <MessageList messages={list} onPick={setInput} />
         ) : (
