@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { checkHealth } from "~/core/api";
+import { ThemeToggle } from "~/components/ThemeToggle";
 import { clearAuth, getUsername } from "~/core/auth";
 
 /** 顶栏:标题 + 后端在线状态 + 当前用户 / 退出登录。 */
@@ -25,36 +26,39 @@ export function TopBar() {
   }, []);
 
   return (
-    <div className="flex h-13 shrink-0 items-center gap-2.5 border-b border-line px-5 py-3">
+    <div className="flex h-13 shrink-0 items-center gap-2.5 border-b border-border px-5 py-3">
       <b className="text-[15px] font-medium">瑞雪地膜智能助手</b>
-      <span className="text-[13px] text-muted">降解率 · 保墒 · 力学 · 用量</span>
+      <span className="text-[13px] text-muted-foreground">降解率 · 保墒 · 力学 · 用量</span>
 
       <span
         title={online ? "后端在线" : "后端未连接"}
         className={`ml-1 h-1.5 w-1.5 rounded-full ${
-          online === null ? "bg-[#d9d9e2]" : online ? "bg-brand" : "bg-[#d33]"
+          online === null ? "bg-muted-foreground/30" : online ? "bg-primary" : "bg-destructive"
         }`}
       />
 
-      <div className="relative ml-auto">
+      <div className="ml-auto" />
+      <ThemeToggle />
+
+      <div className="relative">
         <button
           onClick={() => setMenuOpen((v) => !v)}
-          className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] hover:bg-sand"
+          className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] hover:bg-muted"
         >
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand text-[11px] text-white">
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[11px] text-primary-foreground">
             {username.slice(0, 1).toUpperCase() || "?"}
           </span>
           <span className="max-w-[90px] truncate">{username || "未登录"}</span>
         </button>
 
         {menuOpen && (
-          <div className="absolute right-0 top-10 z-20 w-40 overflow-hidden rounded-[10px] border border-line bg-surface shadow-lg">
+          <div className="absolute right-0 top-10 z-20 w-40 overflow-hidden rounded-[10px] border border-border bg-card shadow-lg">
             <button
               onClick={() => {
                 clearAuth();
                 router.replace("/login");
               }}
-              className="w-full px-3.5 py-2.5 text-left text-[13px] hover:bg-sand"
+              className="w-full px-3.5 py-2.5 text-left text-[13px] hover:bg-muted"
             >
               退出登录
             </button>
