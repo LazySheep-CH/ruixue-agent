@@ -10,6 +10,7 @@ from langchain.agents.middleware import (
 
 from ruixue_agent.agents.middlewares import (
     PromptInjectionGuardMiddleware,
+    SkillInjectionMiddleware,
     TimingLoggingMiddleware,
     ToolErrorHandlingMiddleware,
 )
@@ -74,6 +75,9 @@ def _build_middleware(summary_model_name: str, require_approval: bool) -> list:
         # ⓪ 提示注入防护:放【最前】—— 安全检查要在花钱(摘要/调模型)之前做,
         #    且要在最靠近用户输入的位置,后续中间件都在其保护之下。
         PromptInjectionGuardMiddleware(),
+        # ⓪.5 作业规程注入:按提问场景注入已验证的 SOP(skills/*.md),
+        #     告诉模型"这类问题该怎么做"。只在首轮注入,省 token。
+        SkillInjectionMiddleware(),
         # ① 死循环刹车:已经到上限就该立刻停,不能先花钱做摘要、再发现"哦该停了"。
         ModelCallLimitMiddleware(
             run_limit=MAX_MODEL_CALLS_PER_RUN,
