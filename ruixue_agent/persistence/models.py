@@ -19,6 +19,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     ARRAY,
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -204,4 +205,28 @@ class ChunkRow(Base):
             "comment": "检索单元。父块子块同表,靠 kind 区分:"
             "子块进 Milvus 做向量检索,命中后返回父块给 LLM(Small-to-Big)"
         },
+    )
+
+
+class UserRow(Base):
+    """用户账号。
+
+    为什么用户表放 persistence/ 而不是 ruixue_app/:
+        它是【数据】,和文档/chunk 一样属于持久化层;app 层只做 HTTP,不管存储。
+        这样 CLI/脚本/将来的 IM 渠道也能复用同一套用户体系。
+
+    字段说明:
+        username        登录名,唯一,建索引(登录时按它查)
+        password_hash   bcrypt 哈希串(含盐),【绝不存明文】
+        is_active       软禁用:封号不删数据(删了会破坏历史会话的外键语义)
+    """
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    username: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
