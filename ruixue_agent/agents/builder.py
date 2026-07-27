@@ -15,6 +15,7 @@ from ruixue_agent.agents.middlewares import (
 )
 from ruixue_agent.agents.prompt import SYSTEM_PROMPT
 from ruixue_agent.checkpointer import get_checkpointer
+from ruixue_agent.mcp import load_mcp_tools
 from ruixue_agent.models import create_model
 from ruixue_agent.subagents import delegate_to_expert
 from ruixue_agent.tools import get_tools
@@ -53,7 +54,9 @@ def create_ruixue_agent(
     model = create_model(model_name)
     # 主 agent 的工具 = 基础叶子工具 + 委派工具(多 Agent)。
     # delegate 只给主 agent、不给专家(专家用各自窄工具集),专家因此无法再派活(防递归)。
-    tools = [*get_tools(), delegate_to_expert]
+    # 工具 = 内置叶子工具 + 委派工具 + 【外部 MCP 工具】(配置了才有,连不上则为空)。
+    # MCP 让"加工具"从改代码变成改配置。
+    tools = [*get_tools(), delegate_to_expert, *load_mcp_tools()]
 
     return create_agent(
         model,
