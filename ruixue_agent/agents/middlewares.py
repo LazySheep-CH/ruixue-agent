@@ -64,8 +64,7 @@ class ToolErrorHandlingMiddleware(AgentMiddleware):
             safe_reason = type(e).__name__
             return ToolMessage(
                 content=(
-                    f"工具 {name} 执行失败({safe_reason}),"
-                    "请告知用户该功能暂时不可用,不要编造结果。"
+                    f"工具 {name} 执行失败({safe_reason}),请告知用户该功能暂时不可用,不要编造结果。"
                 ),
                 tool_call_id=request.tool_call["id"],
             )
