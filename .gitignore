@@ -26,3 +26,6 @@ mineru-out/
 # 模型权重(几个 G,由 sentence-transformers 自己缓存)
 models/
 config/config.yaml
+
+# 视频/截图分析工具的临时产物,不进仓库
+.codex-video-frames/
