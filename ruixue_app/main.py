@@ -7,10 +7,13 @@
 
 import json
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
+from langchain_core.messages import AIMessageChunk
 from pydantic import BaseModel, Field
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -51,6 +54,22 @@ app = FastAPI(title="瑞雪地膜智能助手", lifespan=lifespan)
 # 请求追踪:每个请求发一个 request_id,贯穿日志、回写响应头。
 # 这是【HTTP 层】的中间件(套在整个请求外),和 agent 里的中间件是同一思想、不同层。
 app.add_middleware(RequestIdMiddleware)
+
+# 跨域(CORS):前端是独立工程(frontend/),开发期由 Next 代理到这里,属同源;
+# 但前端一旦独立部署到别的域名,浏览器就会拦跨域请求 —— 故显式放行。
+# 【安全】只放行白名单来源,不用 "*"(带自定义头 X-API-Key 时 "*" 也不合法)。
+ALLOWED_ORIGINS = [
+    o.strip()
+    for o in os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
+    if o.strip()
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "X-API-Key", "X-Request-ID"],
+    expose_headers=["X-Request-ID"],  # 让前端能读到请求编号,便于报障
+)
 
 
 # ── 限流(Rate Limiting)────────────────────────────────────────
@@ -174,6 +193,10 @@ def chat_stream(
             config=config,
             stream_mode="messages",
         ):
+            # 只推【模型说的话】。stream_mode="messages" 也会推 ToolMessage(工具返回的
+            # 原文),那是给模型看的中间结果,推给用户会造成"工具原文 + 正式回答"重复。
+            if not isinstance(chunk, AIMessageChunk):
+                continue
             reasoning = chunk.additional_kwargs.get("reasoning_content")
             if reasoning:
                 payload = json.dumps({"type": "thinking", "text": reasoning}, ensure_ascii=False)

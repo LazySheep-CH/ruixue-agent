@@ -44,8 +44,11 @@ dependencies = [
 # `uv sync` 默认会装它们(本地/CI 都有);`uv sync --no-dev` 不装(打生产镜像用)。
 [dependency-groups]
 dev = [
+    "netcdf4>=1.7.4",
     "pytest>=8.0",          # 测试框架
+    "rasterio>=1.4.4",
     "ruff>=0.10",           # 代码规范检查 + 格式化
+    "xarray>=2026.7.0",
 ]
 
 # ── ruff:代码规范 & 格式化 ────────────────────────────────────────
