@@ -20,8 +20,8 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from ruixue_agent.agents import create_ruixue_agent
-from ruixue_app.auth import get_current_user
 from ruixue_app.observability import RequestIdMiddleware, configure_logging
+from ruixue_app.quota import enforce_quota
 from ruixue_app.routes import auth as auth_routes
 
 # 用带 request_id 的结构化日志格式,替代默认的 logging.basicConfig。
@@ -76,13 +76,23 @@ app.add_middleware(
 # ── 限流(Rate Limiting)────────────────────────────────────────
 def _rate_key(request: Request) -> str:
     """限流维度:按【谁】来限流(每个 key 一个独立的额度池)。"""
-    # ===== (你写一行)=====
-    # 优先按 API Key(≈按用户,每个用户各自额度),取不到就按来源 IP:
-    #   return request.headers.get("X-API-Key") or get_remote_address(request)
+    # 优先按 API Key(≈按用户,每个用户各自额度),取不到就按来源 IP
     return request.headers.get("X-API-Key") or get_remote_address(request)
 
 
-limiter = Limiter(key_func=_rate_key)  # 限流器,按 _rate_key 区分不同调用方
+# 计数存哪里:**必须是跨进程共享的**。
+# 上线一般起多个 worker(uvicorn --workers N),若计数各存各的内存,
+# N 个 worker 就等于限额 ×N —— 限流形同虚设。故用 Redis 做共享存储。
+# 没配 REDIS_URL 时退回内存(仅适合单 worker 的本地开发),并明确告警。
+_REDIS_URL = os.getenv("REDIS_URL", "")
+if _REDIS_URL:
+    limiter = Limiter(key_func=_rate_key, storage_uri=_REDIS_URL)
+else:
+    logging.getLogger("ruixue.app").warning(
+        "未配置 REDIS_URL,限流退回【单进程内存】—— 多 worker 部署时限额会被放大 N 倍,"
+        "生产环境务必配置 REDIS_URL"
+    )
+    limiter = Limiter(key_func=_rate_key)
 app.state.limiter = limiter  # 挂到 app 上(slowapi 要求)
 # 超过限额时,自动返回 429 Too Many Requests(不用我们自己写)
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -198,7 +208,9 @@ def _to_response(result: dict) -> ChatResponse:
 def chat(
     request: Request,  # slowapi 靠它拿限流 key,必须有这个参数
     req: ChatRequest,
-    user_id: str = Depends(get_current_user),  # 先认证,拿到当前用户
+    # enforce_quota 内部已含认证(Depends(get_current_user)),并额外消耗每日配额。
+    # 只挂在【会花钱】的端点上;健康检查、查土壤这类不花钱的不挂。
+    user_id: str = Depends(enforce_quota),
 ) -> ChatResponse:
     thread_id = f"{user_id}:{req.thread_id}"  # 命名空间隔离:用户只能碰自己的对话
     config = {"configurable": {"thread_id": thread_id}}
@@ -211,7 +223,7 @@ def chat(
 def chat_resume(
     request: Request,
     req: ResumeRequest,
-    user_id: str = Depends(get_current_user),
+    user_id: str = Depends(enforce_quota),
 ) -> ChatResponse:
     """对 /chat 返回的 pending 操作作出批准/拒绝,让对话继续。
 
@@ -231,7 +243,7 @@ def chat_resume(
 def chat_stream(
     request: Request,  # slowapi 要求
     req: ChatRequest,
-    user_id: str = Depends(get_current_user),
+    user_id: str = Depends(enforce_quota),
 ):
     """流式端点:边生成边返回(SSE)。返回持续字节流,不是一次性 JSON。"""
     thread_id = f"{user_id}:{req.thread_id}"
