@@ -17,11 +17,11 @@ export function Sidebar({ open, onToggle }: { open: boolean; onToggle: () => voi
   if (!open) {
     // 收起态:只留一个展开按钮,把空间全让给正文
     return (
-      <div className="flex w-12 shrink-0 flex-col items-center border-r border-line bg-sand py-3">
+      <div className="flex w-12 shrink-0 flex-col items-center border-r border-border bg-muted py-3">
         <button
           onClick={onToggle}
           title="展开侧栏"
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-line"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent"
         >
           ☰
         </button>
@@ -30,14 +30,14 @@ export function Sidebar({ open, onToggle }: { open: boolean; onToggle: () => voi
   }
 
   return (
-    <aside className="flex w-[248px] shrink-0 flex-col border-r border-line bg-sand">
+    <aside className="flex w-[248px] shrink-0 flex-col border-r border-border bg-muted">
       <div className="flex items-center gap-2 px-3 py-3">
-        <div className="h-6 w-6 rounded-md bg-brand" />
+        <div className="h-6 w-6 rounded-md bg-primary" />
         <span className="flex-1 text-[14px] font-medium">瑞雪</span>
         <button
           onClick={onToggle}
           title="收起侧栏"
-          className="flex h-7 w-7 items-center justify-center rounded-md text-muted hover:bg-line"
+          className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
         >
           ☰
         </button>
@@ -46,23 +46,23 @@ export function Sidebar({ open, onToggle }: { open: boolean; onToggle: () => voi
       <div className="px-3">
         <button
           onClick={() => newThread()}
-          className="mb-2 flex w-full items-center gap-2 rounded-lg border border-line bg-surface
-            px-3 py-2 text-[14px] transition hover:border-brand hover:text-brand"
+          className="mb-2 flex w-full items-center gap-2 rounded-lg border border-border bg-card
+            px-3 py-2 text-[14px] transition hover:border-primary hover:text-primary"
         >
-          <span className="text-brand">＋</span> 新对话
+          <span className="text-primary">＋</span> 新对话
         </button>
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="搜索对话"
-          className="mb-1 w-full rounded-lg bg-surface px-3 py-1.5 text-[13px] outline-none
-            placeholder:text-muted focus:ring-1 focus:ring-brand/30"
+          className="mb-1 w-full rounded-lg bg-card px-3 py-1.5 text-[13px] outline-none
+            placeholder:text-muted-foreground focus:ring-1 focus:ring-primary/30"
         />
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
         {list.length === 0 && (
-          <p className="px-2 py-3 text-[13px] text-muted">{q ? "没有匹配的对话" : "还没有对话"}</p>
+          <p className="px-2 py-3 text-[13px] text-muted-foreground">{q ? "没有匹配的对话" : "还没有对话"}</p>
         )}
         {list.map((t) => (
           <div
@@ -71,8 +71,8 @@ export function Sidebar({ open, onToggle }: { open: boolean; onToggle: () => voi
             className={`group flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-[13.5px]
               ${
                 t.id === currentThreadId
-                  ? "bg-brand-soft text-ink"
-                  : "text-muted hover:bg-line/60 hover:text-ink"
+                  ? "bg-primary/10 text-foreground"
+                  : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
               }`}
           >
             <span className="flex-1 truncate">{t.title}</span>
@@ -82,7 +82,7 @@ export function Sidebar({ open, onToggle }: { open: boolean; onToggle: () => voi
                 e.stopPropagation();
                 deleteThread(t.id);
               }}
-              className="shrink-0 opacity-0 transition group-hover:opacity-100 hover:text-brand"
+              className="shrink-0 opacity-0 transition group-hover:opacity-100 hover:text-primary"
             >
               ×
             </button>

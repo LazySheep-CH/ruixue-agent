@@ -1,38 +1,115 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-/* ── 设计变量:Claude Code 风格(暖米色底 + 陶土橙强调)───────────────
-   与常见的"冷灰蓝 SaaS"刻意区分:底色偏暖、对比柔和、长时间阅读不刺眼。
-   改配色只改这里(tailwind.config.ts 引用这些名字)。 */
+/* 暗色模式:给 <html> 加 class="dark" 即整站切换(组件代码一行不用改)。 */
+@custom-variant dark (&:is(.dark *));
+
+/* ══════════════════════════════════════════════════════════════
+   设计 token —— 学自 deer-flow / shadcn 的体系,三条要点:
+
+   ① 用 oklch 而非 hex:oklch(亮度 色度 色相) 感知均匀,
+      只调亮度不会偏色;hex 调深容易发灰发脏。
+   ② 语义命名 background/foreground 【成对】,而不是 ink/wash 这种描述性名字。
+      语义名换任何主题都成立,描述名(“墨色”)到了深色主题就自相矛盾。
+   ③ 所有中性色共用同一组【色度+色相】(0.008 / 85 暖调),
+      整套灰阶自带统一暖意 —— 这是专业配色的做法,不是各自拍 hex。
+
+   配色取向:Claude 的暖米色 + 陶土橙。
+   ══════════════════════════════════════════════════════════════ */
 :root {
-  --ink: #1f1e1d; /* 主文字:暖黑,不是纯黑 */
-  --muted: #6b6a65; /* 次要文字 */
-  --line: #e8e5dd; /* 分割线:暖灰 */
-  --surface: #ffffff; /* 卡片/输入框 */
-  --wash: #faf9f5; /* 页面底:米白 */
-  --sand: #f2efe6; /* 次级底(侧栏/用户消息块) */
-  --brand: #d97757; /* 强调:陶土橙 */
-  --brand-soft: #f7ede8; /* 强调的浅底 */
+  --radius: 0.625rem;
+
+  --background: oklch(0.977 0.008 85); /* 米白页面底 */
+  --foreground: oklch(0.22 0.006 85); /* 暖黑正文 */
+  --card: oklch(1 0.004 85); /* 卡片/输入框 */
+  --card-foreground: oklch(0.22 0.006 85);
+  --muted: oklch(0.947 0.01 85); /* 次级底(用户消息块) */
+  --muted-foreground: oklch(0.53 0.008 85); /* 次要文字 */
+  --accent: oklch(0.935 0.012 85); /* 悬停底 */
+  --accent-foreground: oklch(0.22 0.006 85);
+  --primary: oklch(0.665 0.128 43); /* 陶土橙:强调/主按钮 */
+  --primary-foreground: oklch(0.99 0.004 85);
+  --destructive: oklch(0.577 0.245 27.3); /* 错误红 */
+  --border: oklch(0.918 0.01 85);
+  --input: oklch(0.9 0.01 85);
+  --ring: oklch(0.665 0.128 43);
+
+  /* 侧栏独立一套 —— 可与主区分开调,不必牵一发动全身 */
+  --sidebar: oklch(0.955 0.012 85);
+  --sidebar-foreground: oklch(0.22 0.006 85);
+  --sidebar-accent: oklch(0.925 0.014 85);
+  --sidebar-border: oklch(0.912 0.01 85);
 }
 
-html,
-body {
-  height: 100%;
-}
-body {
-  background: var(--wash);
-  color: var(--ink);
-  font-family:
-    ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei",
-    sans-serif;
-  font-size: 15.5px;
-  line-height: 1.72; /* 宽松行距:长文可读性 */
-  overflow: hidden;
-  -webkit-font-smoothing: antialiased;
+.dark {
+  --background: oklch(0.235 0.006 85);
+  --foreground: oklch(0.965 0.004 85);
+  --card: oklch(0.265 0.006 85);
+  --card-foreground: oklch(0.965 0.004 85);
+  --muted: oklch(0.295 0.006 85);
+  --muted-foreground: oklch(0.7 0.008 85);
+  --accent: oklch(0.325 0.008 85);
+  --accent-foreground: oklch(0.965 0.004 85);
+  --primary: oklch(0.72 0.13 43); /* 暗底上提亮,保持可读对比 */
+  --primary-foreground: oklch(0.22 0.006 85);
+  --destructive: oklch(0.704 0.191 22.2);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.72 0.13 43);
+
+  --sidebar: oklch(0.215 0.006 85);
+  --sidebar-foreground: oklch(0.965 0.004 85);
+  --sidebar-accent: oklch(0.3 0.008 85);
+  --sidebar-border: oklch(1 0 0 / 10%);
 }
 
-/* ── 消息正文:整块流式排版,不是气泡 ────────────────────────── */
+/* 把 token 暴露成 Tailwind 工具类(v4 是 CSS 优先,不需要 tailwind.config)。
+   这样 bg-background / text-muted-foreground / bg-primary/10 都能直接用。 */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-border: var(--sidebar-border);
+
+  --radius-card: var(--radius);
+  --container-reading: 46rem; /* 正文阅读宽度 */
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  html,
+  body {
+    height: 100%;
+  }
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family:
+      ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei",
+      sans-serif;
+    font-size: 15.5px;
+    line-height: 1.72;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* ── 消息正文里的 markdown 元素 ─────────────────────────────── */
 .prose-msg {
   white-space: pre-wrap;
   word-break: break-word;
@@ -41,7 +118,7 @@ body {
   margin-top: 0.75em;
 }
 .prose-msg code {
-  background: var(--sand);
+  background: var(--muted);
   border-radius: 4px;
   padding: 1.5px 5px;
   font-size: 13.5px;
@@ -55,27 +132,27 @@ body {
   width: 100%;
   margin: 12px 0;
   font-size: 14px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
 }
 .prose-msg th,
 .prose-msg td {
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--border);
   padding: 9px 13px;
   text-align: left;
 }
 .prose-msg th {
-  background: var(--sand);
+  background: var(--muted);
   font-weight: 600;
   font-size: 13px;
-  color: var(--muted);
+  color: var(--muted-foreground);
 }
 .prose-msg tr:last-child td {
   border-bottom: 0;
 }
 
-/* 流式光标 */
+/* ── 动效 ──────────────────────────────────────────────────── */
 @keyframes blink {
   0%,
   100% {
@@ -90,11 +167,10 @@ body {
   font-size: 9px;
   vertical-align: 2px;
   animation: blink 1.1s ease-in-out infinite;
-  color: var(--brand);
+  color: var(--primary);
   margin-left: 3px;
 }
 
-/* 工具运行中的呼吸点 */
 @keyframes pulse-dot {
   0%,
   100% {
@@ -108,17 +184,14 @@ body {
   animation: pulse-dot 1.3s ease-in-out infinite;
 }
 
-/* 细滚动条 */
+/* 细滚动条(跟随主题) */
 *::-webkit-scrollbar {
   width: 9px;
   height: 9px;
 }
 *::-webkit-scrollbar-thumb {
-  background: #d9d5c9;
+  background: var(--input);
   border-radius: 5px;
-}
-*::-webkit-scrollbar-thumb:hover {
-  background: #c9c4b5;
 }
 *::-webkit-scrollbar-track {
   background: transparent;

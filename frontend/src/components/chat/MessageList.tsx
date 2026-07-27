@@ -33,14 +33,14 @@ function ToolTrace({ tools }: { tools: ToolRun[] }) {
   return (
     <div className="mb-3 space-y-1">
       {tools.map((t) => (
-        <div key={t.name} className="flex items-center gap-2 text-[13px] text-muted">
+        <div key={t.name} className="flex items-center gap-2 text-[13px] text-muted-foreground">
           <span
             className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-              t.done ? "bg-brand" : "bg-brand running"
+              t.done ? "bg-primary" : "bg-primary running"
             }`}
           />
           <span>{label(t)}</span>
-          {t.done && <span className="text-brand">✓</span>}
+          {t.done && <span className="text-primary">✓</span>}
         </div>
       ))}
     </div>
@@ -52,17 +52,17 @@ function Welcome({ onPick }: { onPick: (q: string) => void }) {
   return (
     <div className="pt-16">
       <h1 className="mb-2 text-[30px] font-medium tracking-tight">今天想了解地膜的什么?</h1>
-      <p className="mb-8 text-muted">知识问答 · 性能预测 · 环境查询 · 用量估算</p>
+      <p className="mb-8 text-muted-foreground">知识问答 · 性能预测 · 环境查询 · 用量估算</p>
       <div className="space-y-2">
         {SUGGESTIONS.map((s) => (
           <button
             key={s.title}
             onClick={() => onPick(s.q)}
             className="group flex w-full items-baseline gap-3 rounded-lg px-3 py-2.5 text-left
-              transition hover:bg-sand"
+              transition hover:bg-muted"
           >
-            <span className="shrink-0 text-[13px] font-medium text-brand">{s.title}</span>
-            <span className="truncate text-[14px] text-muted group-hover:text-ink">{s.q}</span>
+            <span className="shrink-0 text-[13px] font-medium text-primary">{s.title}</span>
+            <span className="truncate text-[14px] text-muted-foreground group-hover:text-foreground">{s.q}</span>
           </button>
         ))}
       </div>
@@ -74,7 +74,7 @@ function Welcome({ onPick }: { onPick: (q: string) => void }) {
 function Bubble({ m }: { m: Message }) {
   if (m.role === "user") {
     return (
-      <div className="mb-7 rounded-card bg-sand px-4 py-3">
+      <div className="mb-7 rounded-[var(--radius)] bg-muted px-4 py-3">
         <div className="prose-msg">{m.content}</div>
       </div>
     );
@@ -83,15 +83,15 @@ function Bubble({ m }: { m: Message }) {
     <div className="mb-9">
       {m.tools && m.tools.length > 0 && <ToolTrace tools={m.tools} />}
       {m.thinking && (
-        <details className="mb-3 rounded-lg border border-line bg-surface px-3 py-2">
-          <summary className="cursor-pointer select-none text-[13px] text-muted">思考过程</summary>
-          <div className="mt-2 whitespace-pre-wrap text-[13.5px] leading-relaxed text-muted">
+        <details className="mb-3 rounded-lg border border-border bg-card px-3 py-2">
+          <summary className="cursor-pointer select-none text-[13px] text-muted-foreground">思考过程</summary>
+          <div className="mt-2 whitespace-pre-wrap text-[13.5px] leading-relaxed text-muted-foreground">
             {m.thinking}
           </div>
         </details>
       )}
       {m.error ? (
-        <p className="text-sm text-[#c0392b]">{m.error}</p>
+        <p className="text-sm text-destructive">{m.error}</p>
       ) : (
         <div
           className={`prose-msg ${m.streaming && !m.content ? "cursor" : ""}`}
@@ -118,7 +118,7 @@ export function MessageList({
 
   return (
     <div className="flex-1 overflow-y-auto px-6">
-      <div className="mx-auto max-w-reading pb-6">
+      <div className="mx-auto max-w-[46rem] pb-6">
         {messages.length === 0 ? (
           <Welcome onPick={onPick} />
         ) : (

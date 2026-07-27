@@ -55,7 +55,7 @@ export default function ChatPage() {
       </main>
 
       {toast && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 rounded-full bg-ink px-4 py-2 text-[13px] text-white shadow-lg">
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 rounded-full bg-ink px-4 py-2 text-[13px] text-primary-foreground shadow-lg">
           {toast}
         </div>
       )}
