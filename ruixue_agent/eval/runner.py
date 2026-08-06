@@ -23,8 +23,19 @@ from ruixue_agent.eval.trace import Timer, Trace, extract
 logger = logging.getLogger("ruixue.eval")
 
 
-def build_eval_agent(model_name: str = "deepseek-v4-pro"):
-    """装配一个用于评测的 agent —— 和生产同一套装配代码,只换掉 checkpointer。
+# 评测用的温度。0 不是"更聪明",是【为了能测量】。
+#
+# 实测:不设温度(用服务端默认 1.0)时,同一版本连跑三轮通过率
+# 84.8% / 93.9% / 97.0%,极差 12.1% ≈ 4 道题 —— 这把尺子测不出任何
+# 小于 4 道题的改进,拿它做 A/B 对比等于掷骰子。
+#
+# ⚠ 温度 0 不等于完全确定(服务端批处理、MoE 路由仍有残余抖动),
+#   它只是去掉了最大的那个噪声源。噪声地板仍然要实测,不能假设它是 0。
+EVAL_TEMPERATURE = 0.0
+
+
+def build_eval_agent(model_name: str = "deepseek-v4-pro", temperature: float = EVAL_TEMPERATURE):
+    """装配一个用于评测的 agent —— 和生产同一套装配代码,只换 checkpointer 和温度。
 
     **必须复用生产的装配函数**,不能在这里另拼一个:另拼的那个迟早和生产跑偏,
     于是评测测的是一个线上并不存在的 agent,分数再好看也没用。
@@ -33,7 +44,9 @@ def build_eval_agent(model_name: str = "deepseek-v4-pro"):
 
     from ruixue_agent.agents.builder import create_ruixue_agent
 
-    return create_ruixue_agent(model_name=model_name, checkpointer=InMemorySaver())
+    return create_ruixue_agent(
+        model_name=model_name, checkpointer=InMemorySaver(), temperature=temperature
+    )
 
 
 def run_case(

@@ -42,6 +42,10 @@ class Trace:
     # 前者是系统问题,后者是能力问题,混在一起会误导优化方向。
     interrupted: bool = False
     error: str = ""
+    # 执行失败的工具名。工具挂了(Milvus 断连等)会被中间件降级成一条提示,
+    # agent 于是老实回"该功能暂时不可用"—— 判分若按"缺要点"算,就把
+    # 【环境问题】记成了【能力问题】,你会去改提示词,而实际上要修的是 Milvus。
+    failed_tools: list[str] = field(default_factory=list)
 
     @property
     def tool_names(self) -> list[str]:
@@ -97,7 +101,8 @@ def extract(case_id: str, state: dict, latency_ms: int) -> Trace:
     results: dict[str, str] = {}
     for m in msgs:
         if getattr(m, "type", "") == "tool":
-            results[getattr(m, "tool_call_id", "")] = _text(getattr(m, "content", ""))[:300]
+            body = _text(getattr(m, "content", ""))
+            results[getattr(m, "tool_call_id", "")] = body[:300]
 
     last_ai_text = ""
     for m in msgs:
@@ -120,6 +125,12 @@ def extract(case_id: str, state: dict, latency_ms: int) -> Trace:
             txt = _text(getattr(m, "content", ""))
             if txt.strip():
                 last_ai_text = txt
+
+    # 工具执行失败的标记由 ToolErrorHandlingMiddleware 写入(共用同一个常量,
+    # 不在这里硬编码措辞 —— 那样改一个字评测就悄悄失效了)。
+    from ruixue_agent.agents.middlewares import TOOL_FAILURE_MARKER
+
+    tr.failed_tools = [c.name for c in tr.tool_calls if TOOL_FAILURE_MARKER in c.result_preview]
 
     tr.answer = last_ai_text
     # LangGraph 用 __interrupt__ 表示"停下来等人确认"。这不是失败,但也不是完成。

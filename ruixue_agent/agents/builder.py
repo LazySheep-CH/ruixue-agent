@@ -52,6 +52,7 @@ def create_ruixue_agent(
     summary_model_name: str = "deepseek-v4-flash",
     require_approval: bool = False,
     checkpointer=_DEFAULT_CKPT,
+    **model_overrides,
 ):
     """按配置装配并返回瑞雪 agent。
 
@@ -61,8 +62,11 @@ def create_ruixue_agent(
     checkpointer 可替换的原因:评测要跑几百个一次性会话,用生产的 PG
     checkpointer 会把评测数据写进生产表 —— 评测不该污染线上数据。
     评测传内存版即可(见 ruixue_agent/eval/runner.py)。
+
+    model_overrides 透传给模型构造(如 temperature=0)。评测必须压温度,
+    否则量到的是采样噪声而不是能力 —— 实测默认温度下同版本极差 12.1%。
     """
-    model = create_model(model_name)
+    model = create_model(model_name, **model_overrides)
     # 主 agent 的工具 = 基础叶子工具 + 委派工具(多 Agent)。
     # delegate 只给主 agent、不给专家(专家用各自窄工具集),专家因此无法再派活(防递归)。
     # 工具 = 内置叶子工具 + 委派工具 + 【外部 MCP 工具】(配置了才有,连不上则为空)。

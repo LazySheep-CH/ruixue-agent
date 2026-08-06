@@ -134,7 +134,11 @@ def main() -> int:
 
     agent = build_eval_agent(args.model)
 
-    reports, last = [], None
+    # 存盘:分数低的时候要能翻出"哪道题、调了什么、答了什么"
+    RUNS.mkdir(exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    reports, last, saved = [], None, []
     for r in range(1, args.repeat + 1):
         if args.repeat > 1:
             print(f"\n── 第 {r}/{args.repeat} 轮 ──")
@@ -145,12 +149,19 @@ def main() -> int:
         print(rp.render(rep, f"第 {r} 轮" if args.repeat > 1 else "Agent 评测"))
         last = (rep, scores, traces)
 
-    # 存盘:分数低的时候要能翻出"哪道题、调了什么、答了什么"
-    RUNS.mkdir(exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out = RUNS / f"agent_eval_{stamp}.json"
-    rp.save(last[0], last[1], last[2], out)
-    print(f"\n结果已存:{out}")
+        # 【每轮都存】,不是只存最后一轮。
+        #
+        # 多轮跑的目的就是找摇摆的题,而一道题为什么摇摆,只能靠【对照它在
+        # 各轮的轨迹】看出来 —— 这次调了工具下次没调?检索回来的片段不一样?
+        # 只留最后一轮,等于把诊断所需的对照组丢了,还得再花一次钱重跑。
+        #
+        # 另一个好处:跑到一半崩了,前面几轮的结果不会一起没。
+        out = RUNS / (
+            f"agent_eval_{stamp}_r{r}.json" if args.repeat > 1 else f"agent_eval_{stamp}.json"
+        )
+        rp.save(rep, scores, traces, out)
+        saved.append(out)
+    print("\n结果已存:" + ", ".join(str(p) for p in saved))
 
     floor = 0.0
     if args.repeat > 1:
@@ -162,6 +173,16 @@ def main() -> int:
             f"  极差 {nf['spread']:.1%}  标准差 {nf['stdev']:.1%}\n"
             f"  → 以后版本对比时,差异不超过 {nf['spread']:.1%} 就不能声称有变化。"
         )
+        # 逐题稳定性比总极差更可操作:它区分"该修的真缺陷"和"修了也白修的噪声"。
+        if nf["always_fail"]:
+            print(f"  ✗ 每轮都失败(真缺陷,值得修):{', '.join(nf['always_fail'])}")
+        if nf["flaky"]:
+            print(
+                f"  ~ 时对时错(结论不可信,别拿它当依据):{', '.join(nf['flaky'])}\n"
+                f"    这些题要么本身写得含糊,要么 agent 在这类问题上确实摇摆。"
+            )
+        if not nf["flaky"]:
+            print("  ✓ 没有摇摆的题 —— 单次运行的结论就可以直接采信")
 
     if args.baseline:
         base = rp.load(args.baseline)

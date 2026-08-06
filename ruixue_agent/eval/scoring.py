@@ -237,6 +237,11 @@ def score_case(case: EvalCase, tr: Trace, system_prompt: str = "") -> CaseScore:
     if tr.interrupted:
         s.reason = "被中断(HITL 等待确认)"
         return s
+    # 工具挂了(Milvus 断连等)—— agent 老实说"该功能暂时不可用"是【正确行为】,
+    # 判成"缺要点"就把环境问题记成了能力问题,你会去改提示词,而该修的是 Milvus。
+    if tr.failed_tools:
+        s.reason = f"运行异常:工具执行失败({', '.join(sorted(set(tr.failed_tools)))})"
+        return s
     if forbidden:
         s.reason = f"调用了禁止的工具:{', '.join(forbidden)}"
         return s
