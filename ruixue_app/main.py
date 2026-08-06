@@ -333,7 +333,13 @@ def chat_stream(
     """
     thread_id = f"{user_id}:{req.thread_id}"  # 命名空间隔离
     run_id = runs.create_run(user_id, thread_id, req.message)
-    runs.start_background(run_id, _execute_run, run_id, thread_id, req.message)
+    try:
+        runs.start_background(run_id, _execute_run, run_id, thread_id, req.message)
+    except runs.CapacityError:
+        # 容量满:明确告诉用户"现在忙",而不是让他排一个看不到头的队,
+        # 也不是抛 500(那会让人以为是 bug)。503 是"暂时不可用"的正确语义。
+        runs.finish_run(run_id, error="系统繁忙,请稍后重试")
+        raise HTTPException(status_code=503, detail="当前请求过多,请稍后重试") from None
     return _stream_run(run_id, from_start=True)
 
 
