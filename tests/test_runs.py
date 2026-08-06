@@ -1,0 +1,153 @@
+"""异步运行(Run)测试:断线不丢结果 + 重连 + 越权防线 + 残留清理。
+
+要解决的问题:原先 agent 直接在 SSE 请求里跑,客户端一断(刷新页面、切网络、
+锁屏),生成器被取消 → agent 半路停下 → 钱花了、结果没有、用户还得重问。
+"""
+
+import json
+import os
+import time
+
+import pytest
+from fastapi.testclient import TestClient
+from langchain_core.messages import AIMessageChunk
+
+import ruixue_app.auth as auth
+import ruixue_app.main as main_mod
+import ruixue_app.runs as runs
+
+_KEY = "runs-test-key"
+_H = {"X-API-Key": _KEY}
+REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+
+
+def _deps_up() -> bool:
+    """需要 Redis(事件流)+ PostgreSQL(run 记录)。"""
+    try:
+        import redis
+        from sqlalchemy import text
+
+        from ruixue_agent.persistence.engine import get_engine
+
+        redis.Redis.from_url(REDIS_URL, socket_connect_timeout=1).ping()
+        with get_engine().connect() as c:
+            c.execute(text("SELECT 1"))
+        return True
+    except Exception:
+        return False
+
+
+pytestmark = pytest.mark.skipif(
+    not _deps_up(), reason="需要 Redis + PostgreSQL(docker compose up -d)"
+)
+
+
+class _SlowAgent:
+    """慢慢吐字的假 agent —— 好让测试在"跑到一半"时断开。"""
+
+    def stream(self, state, config, stream_mode=None):
+        for t in ["新疆", "尉犁", "适合PBAT70"]:
+            time.sleep(0.3)
+            yield AIMessageChunk(content=t), {}
+
+
+@pytest.fixture
+def client(monkeypatch):
+    monkeypatch.setenv("REDIS_URL", REDIS_URL)
+    monkeypatch.setattr(auth, "API_KEYS", {_KEY: "alice"})
+    monkeypatch.setattr(main_mod, "_agent", _SlowAgent())
+    runs._redis.cache_clear()
+    yield TestClient(main_mod.app)
+    runs._redis.cache_clear()
+
+
+def _start_and_disconnect(client, after: int = 3) -> str:
+    """发起对话,读几个事件就断开,返回 run_id(模拟用户刷新页面)。"""
+    run_id = ""
+    with client.stream(
+        "POST", "/chat/stream", headers=_H, json={"thread_id": "t1", "message": "选配方"}
+    ) as r:
+        n = 0
+        for line in r.iter_lines():
+            if not line.startswith("data:"):
+                continue
+            ev = json.loads(line[5:])
+            if ev.get("type") == "run":
+                run_id = ev["run_id"]
+            n += 1
+            if n >= after:
+                break
+    assert run_id, "流的开头必须下发 run_id,否则客户端无法重连"
+    return run_id
+
+
+# ── 核心:断线后 agent 继续跑完 ────────────────────────────────
+def test_agent_finishes_after_client_disconnects(client):
+    """这是本次改造的全部意义:客户端断了,agent 照跑完,钱不白花。"""
+    run_id = _start_and_disconnect(client)
+    for _ in range(40):  # 最多等 4 秒
+        time.sleep(0.1)
+        r = client.get(f"/chat/runs/{run_id}", headers=_H).json()
+        if r["status"] != "running":
+            break
+    assert r["status"] == "succeeded"
+    assert r["answer"] == "新疆尉犁适合PBAT70", "断线后结果应完整落库"
+
+
+def test_resume_returns_final_answer(client):
+    """重连:已结束的运行直接给最终答案,不必重放整个过程。"""
+    run_id = _start_and_disconnect(client)
+    for _ in range(40):
+        time.sleep(0.1)
+        if client.get(f"/chat/runs/{run_id}", headers=_H).json()["status"] != "running":
+            break
+    texts = []
+    with client.stream("GET", f"/chat/runs/{run_id}/stream", headers=_H) as r:
+        for line in r.iter_lines():
+            if line.startswith("data:"):
+                texts.append(json.loads(line[5:]))
+    assert any("PBAT70" in str(e.get("text", "")) for e in texts)
+    assert texts[-1]["type"] == "done"
+
+
+# ── 越权:只能看自己的运行 ────────────────────────────────────
+def test_cannot_read_others_run(client, monkeypatch):
+    """猜到别人的 run_id 也看不了 —— 否则就能翻别人的对话。"""
+    run_id = _start_and_disconnect(client)
+    monkeypatch.setattr(auth, "API_KEYS", {_KEY: "alice", "bob-key": "bob"})
+    r = client.get(f"/chat/runs/{run_id}", headers={"X-API-Key": "bob-key"})
+    assert r.status_code == 404  # 不是 403:不泄露"这个 run 存在"
+
+
+def test_run_query_requires_auth(client):
+    assert client.get("/chat/runs/whatever").status_code == 401
+
+
+def test_unknown_run_returns_404(client):
+    assert client.get("/chat/runs/does-not-exist", headers=_H).status_code == 404
+
+
+# ── 残留清理:进程被 kill 后不能留下永远 running 的运行 ─────────
+def test_reap_stale_marks_orphans_failed(client, monkeypatch):
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import update
+    from sqlalchemy.orm import Session
+
+    from ruixue_agent.persistence.engine import get_engine
+    from ruixue_agent.persistence.models import RunRow
+
+    rid = runs.create_run("alice", "alice:t9", "残留测试")
+    # 手工把创建时间调老,模拟"进程被 kill 前留下的运行"
+    with Session(get_engine()) as s:
+        s.execute(
+            update(RunRow)
+            .where(RunRow.run_id == rid)
+            .values(created_at=datetime.now(UTC) - timedelta(hours=2))
+        )
+        s.commit()
+
+    runs.reap_stale()
+    row = runs.get_run(rid, "alice")
+    assert row.status == "failed"
+    assert "重启" in (row.error or "")  # 给用户看得懂的原因,不是堆栈

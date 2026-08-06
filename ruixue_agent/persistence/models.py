@@ -230,3 +230,40 @@ class UserRow(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class RunRow(Base):
+    """一次 agent 运行(Run)的记录。
+
+    为什么要这张表 —— 解决"断线就白跑"的问题:
+        原先 agent 直接在 SSE 请求里跑,客户端一断(刷新页面、切网络),
+        生成器被取消 → agent 半路停下 → 【钱花了、结果没有、用户还得重问】。
+        改成:创建 Run → 后台跑(不绑请求生命周期)→ 事件写 Redis Stream。
+        客户端断了照跑完;重连时凭 run_id 把已产生的事件补发出来。
+
+    这张表是 Run 的【权威状态】(Redis 里的事件流是可丢的缓存,有 TTL);
+    进程重启后靠它知道哪些 Run 是残留的(见 runs.reap_stale)。
+
+    字段说明:
+        run_id      对外暴露的运行编号(uuid),客户端凭它查询/重连
+        user_id     归属用户 —— 查询时必须校验,否则猜到 run_id 就能看别人的对话
+        thread_id   会话(已含 user 前缀),用于 checkpointer
+        status      running / succeeded / failed
+        answer      成功时的最终答案(供刷新后直接取回,不必重放事件)
+        error       失败时的【脱敏】原因(不放堆栈,那只进日志)
+    """
+
+    __tablename__ = "runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    run_id: Mapped[str] = mapped_column(String(36), unique=True, index=True, nullable=False)
+    user_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    thread_id: Mapped[str] = mapped_column(String(160), nullable=False)
+    question: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="running")
+    answer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
