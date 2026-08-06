@@ -62,9 +62,23 @@ def _format_context(hits: list[Hit]) -> str:
 class Generator:
     """检索 → 组装 prompt → 生成带引用的答案。retriever 由外部注入。"""
 
+    # 这次模型调用要自己带重试。
+    #
+    # create_model 默认 max_retries=0,理由是"重试统一交给中间件,避免重试叠加"——
+    # 那条理由只对【agent 自己的】模型调用成立,因为它跑在 ModelRetryMiddleware 下面。
+    # 而这里是 search_knowledge 内部的【第二次】模型调用,不在任何中间件之下:
+    # 一次网络抖动 → 整个知识库工具失败 → 用户看到"知识库暂时不可用"。
+    #
+    # 真实数据:Agent 评测跑 99 次对话,踩中 6 次 APIConnectionError,全在这条路径上。
+    # 单元测试永远发现不了 —— 它只在真实网络上、跑足够多次才暴露。
+    #
+    # 原则不是"不要重试",而是**每个模型调用点恰好有一层重试**。
+    # agent 那层在中间件,这一层只能在 SDK。
+    GENERATOR_RETRIES = 2
+
     def __init__(self, retriever, model_name: str = "deepseek-v4-flash") -> None:
         self.retriever = retriever
-        self.llm = create_model(model_name)
+        self.llm = create_model(model_name, max_retries=self.GENERATOR_RETRIES)
 
     def answer(
         self,

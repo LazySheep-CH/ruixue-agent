@@ -56,7 +56,7 @@ def _progress(i, n, case, score):
     print(f"  [{i:>2}/{n}] {mark} {case.id} ({case.category}){tail}", flush=True)
 
 
-def _rescore(cases, path: Path) -> int:
+def _rescore(cases, paths: list[Path], baseline=None) -> int:
     """用【当前的判分逻辑】重判一份已存的轨迹,不调模型。
 
     为什么这是个一等操作:判分规则改了之后,历史分数就不可比了 ——
@@ -67,6 +67,34 @@ def _rescore(cases, path: Path) -> int:
     差的 18 个点全是判分错误,agent 一行没改。没有这个能力,就只能再花一次钱
     重跑,而且还分不清"分数变了"是因为改了判分还是因为模型本来就飘。
     """
+    reports = []
+    for path in paths:
+        rep, scores, traces = _rescore_one(cases, path)
+        reports.append(rep)
+        print(rp.render(rep, f"离线重判 {path.name}"))
+        for sc in scores:
+            if not sc.passed:
+                print(f"    ✗ {sc.case_id} ({sc.category}): {sc.reason}")
+        out = path.with_name(path.stem + "_rescored.json")
+        rp.save(rep, scores, traces, out)
+        print(f"  → {out}\n")
+
+    cats = {c.id: c.category for c in cases}
+    if len(reports) > 1:
+        nf = rp.noise_floor(reports)
+        print(f"── 噪声地板({nf['runs']} 轮)── 极差 {nf['spread']:.1%}  标准差 {nf['stdev']:.1%}")
+        if nf["always_fail"]:
+            print(f"  ✗ 每轮都失败(真缺陷):{', '.join(nf['always_fail'])}")
+        if nf["flaky"]:
+            print(f"  ~ 时对时错(结论不可信):{', '.join(nf['flaky'])}")
+        print(rp.render(rp.consensus(reports, cats), "多数票共识"))
+    if baseline:
+        _print_comparison(baseline, reports, cats, rp.noise_floor(reports)["spread"])
+    return 0
+
+
+def _rescore_one(cases, path: Path):
+    """重判一份轨迹,返回 (报告, 逐题分数, 轨迹列表)。"""
     import json
 
     from ruixue_agent.agents.prompt import SYSTEM_PROMPT
@@ -84,40 +112,64 @@ def _rescore(cases, path: Path) -> int:
             latency_ms=t["latency_ms"],
             interrupted=t.get("interrupted", False),
             error=t.get("error", ""),
+            # 老结果里没有这个字段 —— 用 .get 兜住,不然读旧文件会直接崩。
+            failed_tools=t.get("failed_tools", []),
         )
         for t in raw["traces"]
     }
     picked = [c for c in cases if c.id in traces]
     if not picked:
-        print(f"{path} 里没有与当前评测集匹配的轨迹(评测集换了?)")
-        return 2
+        raise SystemExit(f"{path} 里没有与当前评测集匹配的轨迹(评测集换了?)")
 
     scores = [score_case(c, traces[c.id], system_prompt=SYSTEM_PROMPT) for c in picked]
-    rep = rp.aggregate(scores, [traces[c.id] for c in picked])
-    print(rp.render(rep, f"离线重判 {path.name}"))
-    for s in scores:
-        if not s.passed:
-            print(f"    ✗ {s.case_id} ({s.category}): {s.reason}")
+    tl = [traces[c.id] for c in picked]
+    return rp.aggregate(scores, tl, picked), scores, tl
 
-    out = path.with_name(path.stem + "_rescored.json")
-    rp.save(rep, scores, [traces[c.id] for c in picked], out)
-    print(f"\n重判结果已存:{out}")
-    return 0
+
+def _print_comparison(baseline_paths, cur_reports, cats: dict[str, str], floor: float) -> None:
+    """基线和本次都用【多数票共识】做配对比较。
+
+    为什么两边都要共识:单轮自己就抖(实测温度 0 下极差仍 6.1%)。拿单轮当基线,
+    等于用会晃的尺子量另一把会晃的尺子,而且很容易不自觉挑一轮好看的当基线。
+    """
+    base = rp.consensus([rp.load(p) for p in baseline_paths], cats)
+    cur = rp.consensus(cur_reports, cats)
+    cmp = rp.compare(base, cur, floor=floor)
+    names = ", ".join(p.name for p in baseline_paths)
+    print(f"\n── 与基线对比({len(baseline_paths)} 份取共识:{names})──")
+    print(f"  通过率 {base.pass_rate:.1%} → {cur.pass_rate:.1%}  ({cmp.delta_pass_rate:+.1%})")
+    if cmp.improved:
+        print(f"  变好:{', '.join(cmp.improved)}")
+    if cmp.regressed:
+        print(f"  变差:{', '.join(cmp.regressed)}")
+    print(f"  判定:{cmp.verdict}")
+    if cmp.changed:
+        print(f"  ⚠ 已排除题面改过的题(题号相同但不是同一道题):{', '.join(cmp.changed)}")
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--repeat", type=int, default=1, help="重复跑几轮(≥2 才能量噪声地板)")
-    ap.add_argument("--baseline", type=Path, help="对比用的基线结果文件")
+    ap.add_argument(
+        "--baseline",
+        type=Path,
+        nargs="+",
+        help="基线结果文件;传多份则按【多数票共识】对比(强烈建议,单轮基线自己就抖)",
+    )
     ap.add_argument("--only", help="只跑某个类别,如 injection")
     ap.add_argument("--model", default="deepseek-v4-pro")
     ap.add_argument("--dry-run", action="store_true", help="只校验评测集,不调模型")
-    ap.add_argument("--rescore", type=Path, help="改了判分后,离线重判某次已存的轨迹(不花钱)")
+    ap.add_argument(
+        "--rescore",
+        type=Path,
+        nargs="+",
+        help="离线重判已存的轨迹(不花钱);可给多份取共识,配 --baseline 直接出对比",
+    )
     args = ap.parse_args()
 
     cases = load_cases(EVAL, known_tools=_known_tools())
     if args.rescore:
-        return _rescore(cases, args.rescore)
+        return _rescore(cases, args.rescore, args.baseline)
     if args.only:
         cases = [c for c in cases if c.category == args.only]
         if not cases:
@@ -143,7 +195,7 @@ def main() -> int:
         if args.repeat > 1:
             print(f"\n── 第 {r}/{args.repeat} 轮 ──")
         traces, scores = run_all(agent, cases, on_case=_progress, system_prompt=SYSTEM_PROMPT)
-        rep = rp.aggregate(scores, traces)
+        rep = rp.aggregate(scores, traces, cases)
         reports.append(rep)
         print()
         print(rp.render(rep, f"第 {r} 轮" if args.repeat > 1 else "Agent 评测"))
@@ -185,17 +237,7 @@ def main() -> int:
             print("  ✓ 没有摇摆的题 —— 单次运行的结论就可以直接采信")
 
     if args.baseline:
-        base = rp.load(args.baseline)
-        cmp = rp.compare(base, last[0], floor=floor)
-        print(f"\n── 与基线对比({args.baseline.name})──")
-        print(
-            f"  通过率 {base.pass_rate:.1%} → {last[0].pass_rate:.1%}  ({cmp.delta_pass_rate:+.1%})"
-        )
-        if cmp.improved:
-            print(f"  变好:{', '.join(cmp.improved)}")
-        if cmp.regressed:
-            print(f"  变差:{', '.join(cmp.regressed)}")
-        print(f"  判定:{cmp.verdict}")
+        _print_comparison(args.baseline, reports, {c.id: c.category for c in cases}, floor)
 
     # 有运行异常时用非零退出码 —— 这样接 CI 或脚本时不会把"环境挂了"当成"跑完了"。
     return 1 if last[0].errors else 0
