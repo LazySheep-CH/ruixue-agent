@@ -31,6 +31,7 @@ import logging
 import os
 import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from functools import cache
 
@@ -155,14 +156,52 @@ def reap_stale() -> int:
 
 
 # ── 后台执行 ──────────────────────────────────────────────────
+# 并发上限:同时最多跑几个 agent。
+#
+# 【必须有上限】—— 用裸 threading.Thread 是没有上限的:100 个用户同时提问就起
+# 100 个线程,checkpointer 连接池(5 条)瞬间排满、100 个并发 LLM 调用把账单和
+# 上游限流一起打爆。有界线程池把压力挡在门口,而不是让系统雪崩。
+#
+# 8 的取法:单机几十人场景下,同时真正在等回答的很少;而每个运行要占
+# 1 条 checkpointer 连接 + 1 条业务连接,8 并发对应 ~16 条,PG 上限 100
+# 下即使 4 个 worker 也留有余量。可用 MAX_CONCURRENT_RUNS 调。
+MAX_CONCURRENT_RUNS = int(os.getenv("MAX_CONCURRENT_RUNS", "8"))
+# 等待队列上限:超出就直接拒绝,而不是让用户排一个看不到头的队。
+# 宁可明确告诉他"现在忙,稍后再试",也不要让他盯着转圈等 5 分钟。
+MAX_QUEUED_RUNS = int(os.getenv("MAX_QUEUED_RUNS", "16"))
+
+_executor = ThreadPoolExecutor(max_workers=MAX_CONCURRENT_RUNS, thread_name_prefix="run")
+_inflight = 0  # 已提交但未完成的运行数(排队中 + 执行中)
+_inflight_lock = threading.Lock()
+
+
+class CapacityError(RuntimeError):
+    """系统当前容量已满 —— 调用方应转成 503 告诉用户稍后再试。"""
+
+
 def start_background(run_id: str, target, *args) -> None:
-    """在后台线程里执行 target(*args)。
+    """把一次运行提交到有界线程池。容量满时抛 CapacityError。
 
     为什么用线程而不是 asyncio task:agent 调用链(模型、Milvus、树模型)全是
-    同步阻塞的,放进事件循环会把整个 worker 卡死。线程池本来就是 FastAPI 跑
-    同步端点的方式,这里只是把它从"请求生命周期"里解绑。
-
-    daemon=True:进程退出时不等它 —— 残留状态由 reap_stale 兜底,
-    比让进程卡住等一个长任务更可取。
+    同步阻塞的,放进事件循环会把整个 worker 卡死。
     """
-    threading.Thread(target=target, args=args, daemon=True, name=f"run-{run_id[:8]}").start()
+    global _inflight
+    with _inflight_lock:
+        if _inflight >= MAX_CONCURRENT_RUNS + MAX_QUEUED_RUNS:
+            raise CapacityError("并发已达上限")
+        _inflight += 1
+
+    def _wrapped():
+        global _inflight
+        try:
+            target(*args)
+        finally:
+            with _inflight_lock:
+                _inflight -= 1
+
+    _executor.submit(_wrapped)
+
+
+def inflight_count() -> int:
+    """当前在跑 + 排队的运行数(供 /health 或排查用)。"""
+    return _inflight

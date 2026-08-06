@@ -151,3 +151,69 @@ def test_reap_stale_marks_orphans_failed(client, monkeypatch):
     row = runs.get_run(rid, "alice")
     assert row.status == "failed"
     assert "重启" in (row.error or "")  # 给用户看得懂的原因,不是堆栈
+
+
+# ── 容量闸门:并发必须有上限 ──────────────────────────────────
+@pytest.fixture
+def drained():
+    """容量类测试共享全局在途计数,跑之前/之后都要等它清空,否则互相干扰
+    (前一个测试没跑完的任务会把后一个直接顶到容量上限)。"""
+
+    def wait():
+        for _ in range(60):
+            if runs.inflight_count() == 0:
+                return
+            time.sleep(0.1)
+        raise AssertionError("在途任务未清空,可能有名额泄漏")
+
+    wait()
+    yield
+    wait()
+
+
+def test_capacity_gate_rejects_when_full(drained, monkeypatch):
+    """裸线程没有上限:100 人同时提问就起 100 个线程,连接池排满、
+    并发 LLM 调用把账单和上游限流一起打爆。必须在门口挡住。"""
+    monkeypatch.setattr(runs, "MAX_CONCURRENT_RUNS", 2)
+    monkeypatch.setattr(runs, "MAX_QUEUED_RUNS", 2)
+
+    def slow(_):
+        time.sleep(0.8)
+
+    accepted = rejected = 0
+    for i in range(8):
+        try:
+            runs.start_background(f"cap{i}", slow, i)
+            accepted += 1
+        except runs.CapacityError:
+            rejected += 1
+    assert accepted == 4 and rejected == 4  # 容量 = 并发 + 队列
+
+
+def test_inflight_returns_to_zero(drained, monkeypatch):
+    """在途计数必须归零 —— 泄漏会让系统在"看起来空闲"时拒绝新请求。"""
+    monkeypatch.setattr(runs, "MAX_CONCURRENT_RUNS", 2)
+    monkeypatch.setattr(runs, "MAX_QUEUED_RUNS", 4)
+    for i in range(3):
+        runs.start_background(f"zero{i}", lambda _: time.sleep(0.1), i)
+    for _ in range(50):
+        time.sleep(0.1)
+        if runs.inflight_count() == 0:
+            break
+    assert runs.inflight_count() == 0
+
+
+def test_failed_task_also_releases_slot(drained, monkeypatch):
+    """任务抛异常也要释放名额,否则几次失败就把容量占死。"""
+    monkeypatch.setattr(runs, "MAX_CONCURRENT_RUNS", 2)
+    monkeypatch.setattr(runs, "MAX_QUEUED_RUNS", 2)
+
+    def boom(_):
+        raise RuntimeError("模拟运行失败")
+
+    runs.start_background("boom1", boom, 1)
+    for _ in range(30):
+        time.sleep(0.05)
+        if runs.inflight_count() == 0:
+            break
+    assert runs.inflight_count() == 0, "失败的任务没有释放名额"

@@ -39,11 +39,27 @@ def database_url() -> str:
 
 @lru_cache(maxsize=1)
 def get_engine() -> Engine:
-    """全进程共用一个 Engine(内含连接池)。lru_cache 保证只建一次。"""
+    """全进程共用一个 Engine(内含连接池)。lru_cache 保证只建一次。
+
+    池大小怎么定 —— 要和【实际并发】对齐,不是拍个数:
+
+        每个 worker 进程的用量 ≈ 后台运行并发(默认 8,见 runs.MAX_CONCURRENT_RUNS)
+                                + SSE/查询等短请求若干
+        本池 10+10 = 20 条,再加 checkpointer 自己的池(5 条)≈ 25 条/worker
+
+        PostgreSQL 默认 max_connections=100 → 最多约 4 个 worker(100 ÷ 25)。
+        起更多 worker 前必须同步调大 PG 的 max_connections,否则新 worker
+        会拿不到连接、请求直接失败 —— 这是扩容时最容易踩的坑。
+
+    池太小会怎样:请求排队等连接,表现为"莫名其妙变慢",很难查。
+    池太大也不行:PG 每条连接都是一个进程,几百条会把数据库拖垮。
+    """
     return create_engine(
         database_url(),
-        pool_size=5,  # 常驻连接数
-        max_overflow=5,  # 高峰可临时再开 5 条
+        pool_size=int(os.getenv("DB_POOL_SIZE", "10")),  # 常驻连接数
+        max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "10")),  # 高峰可临时再开
+        pool_timeout=10,  # 等连接最多 10 秒 —— 超了快速失败,别让请求无限挂着
+        pool_recycle=1800,  # 30 分钟回收一次:防止被数据库/中间件掐掉的僵死连接
         pool_pre_ping=True,  # 取连接前先 ping:防止拿到已被服务端断掉的死连接
         echo=False,  # 调试时改 True 可以看到每条真实 SQL
     )

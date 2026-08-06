@@ -5,6 +5,7 @@
 和 web 从"内存 session"演进到"Redis/DB session store"是同一个道理。
 """
 
+import os
 from functools import lru_cache
 
 from langgraph.checkpoint.postgres import PostgresSaver
@@ -27,7 +28,10 @@ def get_checkpointer() -> PostgresSaver:
     #   prepare_threshold=0   关掉预处理语句缓存,和连接池配合更稳
     pool = ConnectionPool(
         conninfo=conn_string,
-        max_size=5,  # 复用连接,别每次新建
+        # 池大小要 >= 后台运行并发(runs.MAX_CONCURRENT_RUNS,默认 8):
+        # 每个正在跑的 agent 都要用 checkpointer 存取会话状态,池小于并发数
+        # 就会互相等连接,表现为"并发一高就变慢"。留 2 条余量给恢复/查询。
+        max_size=int(os.getenv("CHECKPOINTER_POOL_SIZE", "10")),
         kwargs={"autocommit": True, "row_factory": dict_row, "prepare_threshold": 0},
         open=False,  # 不在构造时开(新版 psycopg_pool 推荐显式 open)
     )
