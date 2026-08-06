@@ -28,13 +28,17 @@ def database_url() -> str:
 
     (本地开发这样够用;上线要换成密钥管理服务,而不是把密码放文件里。)
     """
-    load_dotenv(_DOCKER_ENV)
+    load_dotenv(_DOCKER_ENV)  # 不覆盖已存在的环境变量 → 容器里 compose 注入的优先
     user = os.environ["POSTGRES_USER"]
     password = os.environ["POSTGRES_PASSWORD"]
     db = os.environ["POSTGRES_DB"]
-    port = os.getenv("POSTGRES_PORT", "5432")
+    # 主机名必须可配:本机开发连 localhost,但【容器里的 localhost 是容器自己】,
+    # 得连服务名 postgres。写死 localhost 的话 app 一进容器就连不上数据库。
+    host = os.getenv("POSTGRES_HOST", "localhost")
+    # 同理端口:容器间走内网 5432,不受宿主机端口映射影响。
+    port = os.getenv("POSTGRES_PORT", "5432") if host == "localhost" else "5432"
     # postgresql+psycopg = psycopg3 驱动(不是老的 psycopg2)
-    return f"postgresql+psycopg://{user}:{password}@localhost:{port}/{db}"
+    return f"postgresql+psycopg://{user}:{password}@{host}:{port}/{db}"
 
 
 @lru_cache(maxsize=1)

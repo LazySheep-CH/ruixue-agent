@@ -3,6 +3,9 @@ const API = process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8000";
 
 const nextConfig = {
   reactStrictMode: true,
+  // standalone:构建出一个自带最小 node_modules 的独立产物,
+  // 镜像里不必装全套依赖 —— 生产镜像从 ~1GB 降到几百 MB。
+  output: "standalone",
   // 开发期把 /api/* 代理到 FastAPI —— 浏览器看来是同源,免 CORS。
   // 生产可改为 Nginx 反代,或前端独立部署 + 后端开 CORS。
   async rewrites() {

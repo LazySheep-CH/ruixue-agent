@@ -50,7 +50,9 @@ services:
       # 中文排序/比较规则
       POSTGRES_INITDB_ARGS: "--encoding=UTF8"
     ports:
-      - "${POSTGRES_PORT}:5432"
+      # 只绑回环地址:数据库端口给本机开发用,【绝不能对公网开】。
+      # 写成 "5432:5432" 是绑 0.0.0.0 —— 服务器有公网 IP 时,全世界都能连你的库。
+      - "127.0.0.1:${POSTGRES_PORT}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -66,7 +68,8 @@ services:
     container_name: rxmvp-redis
     image: redis:7-alpine
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      # 同 PG:只绑回环。Redis 默认无密码,暴露到公网等于把配额和限流拱手让人。
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     # appendonly:配额是"花掉多少钱"的账,重启不能归零
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
@@ -101,8 +104,9 @@ services:
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
     ports:
-      - "${MINIO_API_PORT}:9000"
-      - "${MINIO_CONSOLE_PORT}:9001"
+      # 只绑回环(默认账号 minioadmin/minioadmin,暴露到公网就是白送)。
+      - "127.0.0.1:${MINIO_API_PORT}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT}:9001"
     volumes:
       - minio_data:/minio_data
     command: minio server /minio_data --console-address ":9001"
@@ -131,8 +135,9 @@ services:
       timeout: 20s
       retries: 3
     ports:
-      - "${MILVUS_PORT}:19530"       # 客户端连这个
-      - "${MILVUS_WEBUI_PORT}:9091"  # WebUI / 健康检查
+      # 只绑回环:Milvus 默认不鉴权,谁连上谁就能读走全部向量。
+      - "127.0.0.1:${MILVUS_PORT}:19530"       # 客户端连这个
+      - "127.0.0.1:${MILVUS_WEBUI_PORT}:9091"  # WebUI / 健康检查
     depends_on:
       - etcd
       - minio
