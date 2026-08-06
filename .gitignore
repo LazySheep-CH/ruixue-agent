@@ -29,3 +29,25 @@ config/config.yaml
 
 # 视频/截图分析工具的临时产物,不进仓库
 .codex-video-frames/
+
+# impeccable-ignore-start
+# 本地设计审查产物；共享设计规范保留在 .impeccable/design.json
+.impeccable/config.local.json
+.impeccable/hook.cache.json
+.impeccable/hook.pending.json
+.impeccable/*.png
+.impeccable/live/server.json
+.impeccable/live/sessions/
+.impeccable/live/previews/
+.impeccable/live/annotations/
+.impeccable/live/cache/
+.impeccable/live/manual-edit-apply-transaction.json
+.impeccable/live/manual-edit-events.jsonl
+.impeccable/live/manual-edit-evidence/
+.impeccable/live/pending-manual-edits.json
+.impeccable/live/deferred-svelte-component-accepts.json
+.impeccable/live/*.png
+# impeccable-ignore-end
+
+# 数据库备份(可能含用户数据,且体积大)
+backups/
