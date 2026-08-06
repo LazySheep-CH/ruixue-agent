@@ -95,14 +95,47 @@ def noise_floor(reports: list[Report]) -> dict:
     是直接能理解、也直接能用来卡阈值的。
     """
     rates = [r.pass_rate for r in reports]
-    if len(rates) < 2:
-        return {"runs": len(rates), "spread": 0.0, "stdev": 0.0, "rates": rates}
-    return {
+    out = {
         "runs": len(rates),
-        "spread": max(rates) - min(rates),
-        "stdev": statistics.stdev(rates),
         "rates": rates,
+        "spread": (max(rates) - min(rates)) if len(rates) > 1 else 0.0,
+        "stdev": statistics.stdev(rates) if len(rates) > 1 else 0.0,
+        **per_case_stability(reports),
     }
+    return out
+
+
+def per_case_stability(reports: list[Report]) -> dict:
+    """逐题稳定性:哪几道题在重复跑之间会翻来翻去。
+
+    ## 为什么总通过率的极差不够
+
+    极差只告诉你"整体抖 6%",但 6% 可能是【同两道题反复翻】,也可能是
+    【每次都是不同的题在翻】。这两种情况的处理方式完全不同:
+
+        固定几道题不稳 → 那几道题本身写得含糊,或者 agent 在那类问题上确实摇摆
+                         → 该修用例或修 agent
+        到处随机翻     → 温度带来的普遍抖动
+                         → 只能靠多跑几轮取平均,修单道题没意义
+
+    更要紧的一点:**一道只失败过一次的题,可能根本不是缺陷,只是抖了一下。**
+    在花时间去"修"它之前,先看它是不是每次都错 —— 否则修的是噪声。
+
+    返回:
+        flaky   在多轮之间结果不一致的题 → 结论不可信,别拿它当依据
+        always_fail  每轮都失败 → 这才是真缺陷,值得修
+        always_pass  每轮都通过
+    """
+    if len(reports) < 2:
+        return {"flaky": (), "always_fail": (), "always_pass": ()}
+    ids = set(reports[0].per_case)
+    for r in reports[1:]:
+        ids &= set(r.per_case)
+    flaky, fail, ok = [], [], []
+    for i in sorted(ids):
+        vals = [r.per_case[i] for r in reports]
+        (ok if all(vals) else fail if not any(vals) else flaky).append(i)
+    return {"flaky": tuple(flaky), "always_fail": tuple(fail), "always_pass": tuple(ok)}
 
 
 # ── 配对比较 ──────────────────────────────────────────────────
