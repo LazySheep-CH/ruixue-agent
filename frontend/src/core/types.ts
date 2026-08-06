@@ -32,4 +32,18 @@ export type StreamEvent =
   | { type: "thinking"; text: string }
   | { type: "answer"; text: string }
   | { type: "tool_start"; name: string }
-  | { type: "tool_end"; name: string };
+  | { type: "tool_end"; name: string }
+  /** 后端在流的开头下发运行编号。存下它,断线/刷新后可凭它重连取回结果。 */
+  | { type: "run"; run_id: string }
+  /** 本次运行结束(正常或失败后)—— 收到即可停止渲染"生成中"。 */
+  | { type: "done" }
+  | { type: "error"; text: string };
+
+/** 一次运行的状态(GET /chat/runs/{id})。刷新页面后用它把答案取回来。 */
+export interface RunStatus {
+  run_id: string;
+  status: "running" | "succeeded" | "failed";
+  question: string;
+  answer: string | null;
+  error: string | null;
+}
