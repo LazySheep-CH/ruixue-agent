@@ -42,15 +42,25 @@ KEEP_RECENT_MESSAGES = 20
 REQUIRE_APPROVAL_TOOLS = ["delegate_to_expert"]
 
 
+# 用一个哨兵对象区分"没传"和"显式传 None"。
+# 不能用 None 当默认值:那样就没法表达"我不要 checkpointer"了。
+_DEFAULT_CKPT = object()
+
+
 def create_ruixue_agent(
     model_name: str = "deepseek-v4-pro",
     summary_model_name: str = "deepseek-v4-flash",
     require_approval: bool = False,
+    checkpointer=_DEFAULT_CKPT,
 ):
     """按配置装配并返回瑞雪 agent。
 
     summary_model_name 单独给【便宜模型】:摘要是内部动作、用户看不到,
     没必要用贵的 pro —— 同样的活,flash 便宜一个量级。
+
+    checkpointer 可替换的原因:评测要跑几百个一次性会话,用生产的 PG
+    checkpointer 会把评测数据写进生产表 —— 评测不该污染线上数据。
+    评测传内存版即可(见 ruixue_agent/eval/runner.py)。
     """
     model = create_model(model_name)
     # 主 agent 的工具 = 基础叶子工具 + 委派工具(多 Agent)。
@@ -64,7 +74,7 @@ def create_ruixue_agent(
         tools,
         system_prompt=SYSTEM_PROMPT,
         # 会话状态持久化到 PostgreSQL:重启不丢、多 worker 共享(按 thread_id 存取)
-        checkpointer=get_checkpointer(),
+        checkpointer=(get_checkpointer() if checkpointer is _DEFAULT_CKPT else checkpointer),
         middleware=_build_middleware(summary_model_name, require_approval),
     )
 
