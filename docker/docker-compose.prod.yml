@@ -1,0 +1,108 @@
+# 生产编排 —— 在基础设施之上,把【应用本身】也编排进来。
+#
+# 这是一个 overlay(叠加层),不是独立文件。必须和基础文件一起用:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# 为什么用叠加而不是复制一份完整的 compose:复制出来的两份一定会慢慢跑偏
+# (改了开发的忘了改生产),迟早出现"开发能跑生产起不来"。叠加只写差异,
+# postgres/redis/milvus 的定义永远只有一处。
+#
+# 叠加层加了什么:
+#   migrate   一次性任务:跑数据库迁移,跑完退出
+#   app       后端(FastAPI),等 migrate 成功后才起
+#   web       前端(Next.js)
+#   nginx     唯一公网入口(80/443)
+#
+# ── 启动顺序为什么要管 ──
+# 没有 migrate 这一环的话,app 起来时表可能还不存在,或者代码是新的、表结构是旧的,
+# 报的错还五花八门(UndefinedColumn / relation does not exist)。
+# 让迁移作为一道【必须成功的闸门】,app 只在它退出码为 0 之后才起 —— 要么整套是
+# 一致的,要么根本不放行。
+
+name: ruixue-mvp
+
+services:
+  # ── 数据库迁移:一次性任务,跑完就退出 ────────────────────────
+  migrate:
+    container_name: rxmvp-migrate
+    image: ruixue-app:${APP_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    # 先读 .env(基础设施凭据),再读 .env.prod(应用密钥)覆盖 —— 数据库密码
+    # 只在 .env 里定义一处,不用在两个文件里同步(同步就一定会跑偏)。
+    env_file: [.env, .env.prod]
+    environment:
+      POSTGRES_HOST: postgres
+    command: >
+      uv run alembic -c ruixue_agent/persistence/migrations/alembic.ini upgrade head
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"   # 一次性任务,失败了不要反复重试刷屏 —— 让部署脚本报错停下
+
+  # ── 后端 ──────────────────────────────────────────────────────
+  app:
+    container_name: rxmvp-app
+    image: ruixue-app:${APP_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    env_file: [.env, .env.prod]
+    environment:
+      # 容器里的 localhost 是容器自己,依赖一律走 compose 的服务名。
+      POSTGRES_HOST: postgres
+      REDIS_URL: redis://redis:6379/0
+      MILVUS_URI: http://milvus:19530
+      # worker 数受 PG max_connections 约束(每 worker ~30 条连接),
+      # 不能按 CPU 核数拍脑袋加。详见 docs/运维手册.md「并发与容量」。
+      UVICORN_WORKERS: ${UVICORN_WORKERS:-2}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully   # 迁移成功才放行
+      redis:
+        condition: service_healthy
+      milvus:
+        condition: service_healthy
+    # 【不映射宿主机端口】:后端只对 nginx 开放,不该能从公网直连
+    # ——直连就绕过了 nginx 上的 TLS、超时和请求体限制。
+    expose: ["8000"]
+    restart: unless-stopped
+    # 崩了要能自动拉起,但也要防"崩溃-重启"死循环把 CPU 打满。
+    deploy:
+      resources:
+        limits:
+          memory: 4G   # 嵌入模型 + 三个树模型常驻,给足;超了宁可 OOM 也别拖垮整机
+
+  # ── 前端 ──────────────────────────────────────────────────────
+  web:
+    container_name: rxmvp-web
+    image: ruixue-web:${APP_TAG:-latest}
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    expose: ["3000"]
+    depends_on: [app]
+    restart: unless-stopped
+
+  # ── Nginx:唯一公网入口 ───────────────────────────────────────
+  nginx:
+    container_name: rxmvp-nginx
+    image: nginx:1.27-alpine
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      # :ro 只读挂载 —— 配置是代码,容器不该能改它
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/certs:/etc/letsencrypt        # 证书(申请后才有内容)
+      - ./nginx/www:/var/www/certbot          # certbot HTTP-01 验证用
+    depends_on: [app, web]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

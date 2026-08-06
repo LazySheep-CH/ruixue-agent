@@ -51,3 +51,11 @@ config/config.yaml
 
 # 数据库备份(可能含用户数据,且体积大)
 backups/
+
+# 生产密钥与证书:绝不提交
+docker/.env.prod
+docker/nginx/certs/
+docker/nginx/www/
+
+# 其他工具的工作目录(含 node_modules),不进本仓库
+.codex-work/
