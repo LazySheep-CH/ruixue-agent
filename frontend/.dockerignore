@@ -1,0 +1,14 @@
+# 打前端镜像时【不】拷进去的东西。
+#
+# node_modules 尤其重要:宿主机(Windows)装的原生模块和镜像里的 Linux 不兼容,
+# 拷进去会覆盖 deps 阶段刚装好的那份,构建出一个跑不起来的产物 —— 而且报错
+# 通常出现在运行时,很难联想到是这里的问题。
+node_modules/
+.next/
+out/
+.git/
+.env*.local
+npm-debug.log*
+*.md
+tests/
+coverage/

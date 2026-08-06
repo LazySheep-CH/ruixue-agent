@@ -14,12 +14,15 @@ search() 只返回 (chunk_id, 相似度),取正文由 PgRepository 负责,
 
 from __future__ import annotations
 
+import os
+
 from pymilvus import DataType, MilvusClient
 
 from ruixue_agent.rag.embedding import embed
 
 _DIM = 512  # BAAI/bge-small-zh-v1.5 输出维度
-_URI = "http://localhost:19530"
+# 同 PostgreSQL:容器里的 localhost 是容器自己,得连服务名(http://milvus:19530)。
+_URI = os.getenv("MILVUS_URI", "http://localhost:19530")
 _BATCH = 2000  # 单次 upsert 批大小
 
 # Milvus 是最终一致:upsert 返回不代表数据可见(默认 Bounded 有秒级延迟窗口,

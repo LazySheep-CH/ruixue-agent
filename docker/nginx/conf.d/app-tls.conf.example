@@ -1,0 +1,75 @@
+# HTTPS 站点配置模板。
+#
+# 用法:改名为 app-tls.conf,把 example.com 全部换成你的域名,然后
+#       docker compose exec nginx nginx -s reload
+#
+# 启用后记得把 app.conf 里 80 端口的两个 location(/api/ 和 /)删掉或注释,
+# 只留 acme-challenge —— 否则 HTTP 明文入口还开着,TLS 等于白加。
+
+server {
+    listen 80;
+    server_name example.com;
+
+    # 续期验证要走明文 80,这一段必须留。
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+    # 其余一律跳 HTTPS。301 是永久跳转,浏览器会记住。
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/example.com/privkey.pem;
+
+    # 只留 TLS 1.2/1.3:1.0/1.1 已被各大浏览器判定为不安全。
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    # HSTS:告诉浏览器"这个域名以后只准用 HTTPS 访问",防降级攻击。
+    # ⚠ 一旦下发,浏览器会记住 max-age 这么久;域名还没稳定前别急着开。
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    # 别让本站被别人 iframe 套壳(点击劫持)。
+    add_header X-Frame-Options SAMEORIGIN always;
+    add_header X-Content-Type-Options nosniff always;
+
+    # 同 app.conf:变量 + resolver,避免容器换 IP 后 nginx 一直打旧地址。
+    resolver 127.0.0.11 valid=10s ipv6=off;
+    resolver_timeout 5s;
+
+    location /api/ {
+        set $backend "app:8000";
+        rewrite ^/api/?(.*)$ /$1 break;
+        proxy_pass http://$backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # SSE 三件套,和 app.conf 里一样,理由见那边的注释。
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_set_header X-Accel-Buffering no;
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
+    }
+
+    location / {
+        set $frontend "web:3000";
+        proxy_pass http://$frontend;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
