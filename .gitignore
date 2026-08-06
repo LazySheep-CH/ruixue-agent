@@ -15,12 +15,19 @@ __pycache__/
 # git 是给【代码】用的:它假设文件小、改动是行级的、历史要永久保留。
 # 4.2G 的解析产物全都不满足 —— 而且 git 历史【删不掉】,提交一次就永远背着。
 # 判断标准就一句:能不能用代码重新生成?
-#   能 → 是产物,不进 git(data/ 全部能:MinerU 输出重跑管道就有)
+#   能 → 是产物,不进 git(data/ 大部分能:MinerU 输出重跑管道就有)
 #   不能 → 是资产,得有别的地方存(原始 PDF → 以后进 MinIO)
-# 忽略 data/ 下的内容,但【保留】data/predictors/(预测模型训练输入,小、是复现根基)。
+#
+# 两个例外,都是【手工做的、重跑管道得不到的复现根基】:
+#   data/predictors/  预测模型训练输入
+#   data/eval/        评测集 = 尺子。不在库里,README 里的 R@1 0.807 和
+#                     Agent 32/33 就没人能复现,基线也无从对比 —— 这是
+#                     和"产物"完全不同的东西:它是人一道一道标注出来的。
+#                     ~700KB,完全在 git 舒适区内。
 # 注意:必须用 data/* 而非 data/ —— 整目录被忽略时,子目录例外不生效。
 data/*
 !data/predictors/
+!data/eval/
 mineru-out/
 
 # 模型权重(几个 G,由 sentence-transformers 自己缓存)
@@ -59,3 +66,6 @@ docker/nginx/www/
 
 # 其他工具的工作目录(含 node_modules),不进本仓库
 .codex-work/
+
+# 评测运行结果(每次跑都会生成,不进库)
+runs/
