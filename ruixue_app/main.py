@@ -10,7 +10,7 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from langchain_core.messages import AIMessageChunk, ToolMessage
@@ -20,6 +20,8 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from ruixue_agent.agents import create_ruixue_agent
+from ruixue_app import runs
+from ruixue_app.auth import get_current_user  # 查询类端点只需认证,不消耗配额
 from ruixue_app.observability import RequestIdMiddleware, configure_logging
 from ruixue_app.quota import enforce_quota
 from ruixue_app.routes import auth as auth_routes
@@ -45,6 +47,9 @@ async def lifespan(app: FastAPI):
     # 服务启动:建一次 agent,存进 _agent 给所有请求复用:
     #   _agent = create_ruixue_agent()
     _agent = create_ruixue_agent()
+    # 清理残留:进程上次被 kill 时,后台任务没了但库里还写着 running,
+    # 用户会一直等一个永远不会完成的运行。启动时统一标记为失败。
+    runs.reap_stale()
     yield
     # ↑ yield 前是"启动";yield 后是"关闭"。关闭时的清理写在这下面
     #   (目前没有要清理的资源,先留空)。
@@ -238,6 +243,82 @@ def chat_resume(
     return _to_response(result)
 
 
+def _execute_run(run_id: str, thread_id: str, message: str) -> None:
+    """在后台线程里跑 agent,把过程事件发到该 Run 的流上。
+
+    这个函数【不绑请求生命周期】—— 客户端断了它照跑完,结果落库。
+    这正是"刷新页面不丢结果、钱不白花"的关键。
+    """
+    config = {"configurable": {"thread_id": thread_id}}
+    announced: set[str] = set()  # 已通知"开始"的工具,避免流式分片重复推
+    answer_parts: list[str] = []
+    try:
+        for chunk, _meta in _agent.stream(
+            {"messages": [{"role": "user", "content": message}]},
+            config=config,
+            stream_mode="messages",
+        ):
+            # 工具【执行完毕】:只报"哪个工具跑完了",不推工具返回的原文
+            # (那是给模型看的中间结果,推给用户会和正式回答重复)。
+            if isinstance(chunk, ToolMessage):
+                runs.publish(run_id, {"type": "tool_end", "name": chunk.name or ""})
+                continue
+            if not isinstance(chunk, AIMessageChunk):
+                continue
+            # 工具【开始调用】:让用户看见 agent 在做什么,而不是干等黑盒。
+            for tc in chunk.tool_call_chunks or []:
+                name = tc.get("name")
+                if name and name not in announced:
+                    announced.add(name)
+                    runs.publish(run_id, {"type": "tool_start", "name": name})
+            if reasoning := chunk.additional_kwargs.get("reasoning_content"):
+                runs.publish(run_id, {"type": "thinking", "text": reasoning})
+            if chunk.content:
+                answer_parts.append(str(chunk.content))
+                runs.publish(run_id, {"type": "answer", "text": chunk.content})
+    except Exception as e:
+        # 详情进日志,给用户的只有脱敏短语(和全局异常兜底同一原则)
+        logger.exception("运行 %s 失败", run_id)
+        runs.finish_run(run_id, error=f"运行失败({type(e).__name__})")
+        runs.publish(run_id, {"type": "error", "text": "生成失败,请重试"})
+        runs.publish(run_id, {"type": "done"})
+        return
+
+    runs.finish_run(run_id, answer="".join(answer_parts))
+    runs.publish(run_id, {"type": "done"})
+
+
+def _sse(event: dict) -> str:
+    return f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+
+def _stream_run(run_id: str, from_start: bool):
+    """把某个 Run 的事件流转成 SSE。from_start=True 时【从头补发】(重连场景)。"""
+
+    def gen():
+        # 先把 run_id 告诉客户端 —— 前端存下它,断线后才能重连
+        yield _sse({"type": "run", "run_id": run_id})
+        last = "0-0" if from_start else "$"
+        idle = 0
+        while True:
+            events = runs.read_events(run_id, last_id=last, block_ms=5000)
+            if not events:
+                idle += 1
+                if idle > 24:  # 连续 2 分钟没有新事件 —— 判定异常,别让连接空挂
+                    yield _sse({"type": "error", "text": "运行超时"})
+                    return
+                yield ": keepalive\n\n"  # SSE 注释行:防代理把空闲连接掐掉
+                continue
+            idle = 0
+            for eid, ev in events:
+                last = eid
+                yield _sse(ev)
+                if ev.get("type") == "done":
+                    return
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
+
+
 @app.post("/chat/stream")
 @limiter.limit("20/minute")
 def chat_stream(
@@ -245,49 +326,46 @@ def chat_stream(
     req: ChatRequest,
     user_id: str = Depends(enforce_quota),
 ):
-    """流式端点:边生成边返回(SSE)。返回持续字节流,不是一次性 JSON。"""
-    thread_id = f"{user_id}:{req.thread_id}"
-    config = {"configurable": {"thread_id": thread_id}}
+    """发起对话:创建 Run → 后台跑 agent → SSE 推送过程事件。
 
-    def event_generator():
-        announced: set[str] = set()  # 已通知"开始"的工具,避免流式分片重复推
-        seen_tools: set[str] = set()
-        # _meta 用不到,用下划线开头表示"我知道它在,但故意不用"(避免 lint 报未用变量)
-        for chunk, _meta in _agent.stream(
-            {"messages": [{"role": "user", "content": req.message}]},
-            config=config,
-            stream_mode="messages",
-        ):
-            # 工具【执行完毕】:ToolMessage 带工具名。只报"哪个工具跑完了",
-            # 不把工具返回的原文推给用户(那是给模型看的中间结果,会和正式回答重复)。
-            if isinstance(chunk, ToolMessage):
-                if chunk.name and chunk.name not in seen_tools:
-                    seen_tools.add(chunk.name)
-                payload = json.dumps(
-                    {"type": "tool_end", "name": chunk.name or ""}, ensure_ascii=False
-                )
-                yield f"data: {payload}\n\n"
-                continue
+    与旧版的区别:agent 不再跑在请求里。客户端断开只是断了这条 SSE,
+    agent 继续跑完并落库;客户端可用 /chat/runs/{run_id}/stream 重连补看。
+    """
+    thread_id = f"{user_id}:{req.thread_id}"  # 命名空间隔离
+    run_id = runs.create_run(user_id, thread_id, req.message)
+    runs.start_background(run_id, _execute_run, run_id, thread_id, req.message)
+    return _stream_run(run_id, from_start=True)
 
-            if not isinstance(chunk, AIMessageChunk):
-                continue
 
-            # 工具【开始调用】:模型决定用某工具时,tool_call_chunks 里会陆续带出名字。
-            # 前端据此显示"正在检索知识库…"这类进度 —— agent 产品的核心体验:
-            # 让用户看见它在做什么,而不是干等一个黑盒。
-            for tc in chunk.tool_call_chunks or []:
-                name = tc.get("name")
-                if name and name not in announced:
-                    announced.add(name)
-                    payload = json.dumps({"type": "tool_start", "name": name}, ensure_ascii=False)
-                    yield f"data: {payload}\n\n"
+@app.get("/chat/runs/{run_id}")
+def get_run_status(run_id: str, user_id: str = Depends(get_current_user)) -> dict:
+    """查询一次运行的状态与结果 —— 刷新页面后用它把答案取回来。"""
+    row = runs.get_run(run_id, user_id)  # 内部校验归属,防越权看别人的对话
+    if row is None:
+        raise HTTPException(status_code=404, detail="运行不存在")
+    return {
+        "run_id": row.run_id,
+        "status": row.status,
+        "question": row.question,
+        "answer": row.answer,
+        "error": row.error,
+    }
 
-            reasoning = chunk.additional_kwargs.get("reasoning_content")
-            if reasoning:
-                payload = json.dumps({"type": "thinking", "text": reasoning}, ensure_ascii=False)
-                yield f"data: {payload}\n\n"
-            if chunk.content:
-                payload = json.dumps({"type": "answer", "text": chunk.content}, ensure_ascii=False)
-                yield f"data: {payload}\n\n"
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+@app.get("/chat/runs/{run_id}/stream")
+def resume_run_stream(run_id: str, user_id: str = Depends(get_current_user)):
+    """重连:从头补发该 Run 已产生的事件,并继续推后续的。"""
+    row = runs.get_run(run_id, user_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="运行不存在")
+    if row.status != "running":  # 已结束的直接给结果,不必重放
+        return StreamingResponse(
+            iter(
+                [
+                    _sse({"type": "answer", "text": row.answer or row.error or ""}),
+                    _sse({"type": "done"}),
+                ]
+            ),
+            media_type="text/event-stream",
+        )
+    return _stream_run(run_id, from_start=True)
