@@ -499,3 +499,60 @@ def test_tool_failure_marker_is_shared_not_hardcoded():
         ]
     }
     assert extract("c", state, 0).failed_tools == ["search_knowledge"]
+
+
+def test_consensus_uses_majority_vote_not_a_single_round():
+    """单轮自己就抖(实测温度 0 下极差仍 6.1%)。拿单轮当基线,等于用会晃的尺子
+    量另一把会晃的尺子 —— 而且很容易不自觉挑一轮好看的当基线,那就成了自欺。"""
+    runs = [
+        _rep({"a": True, "b": False, "c": True}),
+        _rep({"a": True, "b": True, "c": False}),
+        _rep({"a": False, "b": False, "c": True}),
+    ]
+    con = rp.consensus(runs)
+    assert con.per_case == {"a": True, "b": False, "c": True}
+    assert con.passed == 2 and con.n == 3
+
+
+def test_consensus_category_counts_are_not_summed_across_rounds():
+    """3 轮相加会显示 "9/12",读者会以为有 12 道题 —— 样本量被虚报 3 倍。"""
+    runs = [_rep({"a": True, "b": False}) for _ in range(3)]
+    for r in runs:
+        r.by_category = {"refuse": (1, 2)}
+    con = rp.consensus(runs, categories={"a": "refuse", "b": "refuse"})
+    assert con.by_category["refuse"] == (1, 2), "共识必须逐题重算,不是把各轮相加"
+
+
+def test_changed_question_is_excluded_from_comparison():
+    """题号相同但题面变了 = 两道不同的题。静默比下去会给出看似合理、实则无意义的结论。"""
+    base = _rep({"a": True, "b": False})
+    base.case_hashes = {"a": "aaa", "b": "bbb"}
+    cur = _rep({"a": True, "b": True})
+    cur.case_hashes = {"a": "aaa", "b": "ZZZ"}  # b 换了题面
+    c = rp.compare(base, cur)
+    assert c.changed == ("b",)
+    assert c.improved == (), "换了题面的'变好'不算数"
+
+
+def test_baseline_without_hashes_is_flagged_as_unverifiable():
+    """老基线没有指纹 → 必须明说"没法验证",而不是默认可比。
+
+    实测吃过一次:rf04 换了题面,对比却把它算成"变好",差点当成改动生效。
+    """
+    base = _rep({"a": False})
+    cur = _rep({"a": True})
+    cur.case_hashes = {"a": "aaa"}
+    assert "无法确认两边是同一套题" in rp.compare(base, cur).verdict
+
+
+def test_rag_generator_has_its_own_retry():
+    """search_knowledge 内部还有【第二次】模型调用,它不在 ModelRetryMiddleware 之下。
+
+    一次网络抖动 → 整个知识库工具失败。评测跑 99 次对话踩中 6 次 APIConnectionError,
+    全在这条路径上 —— 单元测试发现不了,只有真实网络上跑足够多次才暴露。
+    原则:每个模型调用点【恰好】有一层重试。agent 那层在中间件,这层只能在 SDK。
+    """
+    from ruixue_agent.rag.generate import Generator
+
+    gen = Generator(retriever=None)
+    assert getattr(gen.llm, "max_retries", 0) >= 2, "RAG 生成器必须自带重试"
