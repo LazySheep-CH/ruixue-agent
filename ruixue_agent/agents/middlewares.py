@@ -98,6 +98,15 @@ class SkillInjectionMiddleware(AgentMiddleware):
         return {"messages": [SystemMessage(content=text)]}
 
 
+# 工具失败消息的机器可读标记。
+#
+# 为什么要单独抽一个常量:评测需要区分【工具挂了】和【模型没选对工具】——
+# 前者是环境问题(修 Milvus),后者是能力问题(改提示词/工具描述)。两者混在
+# 一起会把优化方向带偏。靠在评测里硬编码这句话的措辞太脆(改个字就失效),
+# 所以在产生它的地方定义常量,消费方(eval/trace.py)引用同一个。
+TOOL_FAILURE_MARKER = "[TOOL_FAILED]"
+
+
 class ToolErrorHandlingMiddleware(AgentMiddleware):
     """工具执行失败时优雅降级:不让单个工具异常拖垮整个对话。
 
@@ -121,7 +130,8 @@ class ToolErrorHandlingMiddleware(AgentMiddleware):
             safe_reason = type(e).__name__
             return ToolMessage(
                 content=(
-                    f"工具 {name} 执行失败({safe_reason}),请告知用户该功能暂时不可用,不要编造结果。"
+                    f"{TOOL_FAILURE_MARKER} 工具 {name} 执行失败({safe_reason}),"
+                    f"请告知用户该功能暂时不可用,不要编造结果。"
                 ),
                 tool_call_id=request.tool_call["id"],
             )
