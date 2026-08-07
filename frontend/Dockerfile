@@ -21,6 +21,9 @@ RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001
 # standalone 产物已自带运行所需的最小依赖
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# public/ 目前是空目录,但必须存在 —— 否则这行 COPY 直接让构建失败。
+# 用 .gitkeep 占位而不是删掉这行:以后加 favicon/图片就是往里放文件,
+# 不用再想起来改 Dockerfile。
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 USER nextjs
 EXPOSE 3000

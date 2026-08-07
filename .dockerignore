@@ -48,7 +48,11 @@ design-system/
 # ── 密钥:绝不进镜像。凭据一律运行时用环境变量注入 ──
 .env
 .env.*
-config/config.yaml
+
+# ⚠ config/config.yaml 【不】排除 —— 它是"配置即代码":里面写的是
+#   api_key: $DEEPSEEK_API_KEY 这样的占位符,运行时才从环境变量解析,本身不含密钥。
+#   排除掉会让 app 一启动就 FileNotFoundError(实测踩过)。
+#   "万一有人写了明文 key"这个风险不靠约定管,靠 Dockerfile 里的构建期断言拦。
 
 # ⚠ models/ 【不】排除 —— 预测模型产物必须随镜像走(见 Dockerfile ④)。
 # ⚠ scripts/ 也不排除:训练脚本不大,而且报错信息里会让用户去跑它。

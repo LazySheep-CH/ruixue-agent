@@ -35,8 +35,10 @@ services:
     env_file: [.env, .env.prod]
     environment:
       POSTGRES_HOST: postgres
+    # 直接调 alembic,不加 `uv run` —— 运行镜像是多阶段构建的产物,
+    # 里面【没有 uv】(它只存在于 builder 阶段),venv 已经在 PATH 上。
     command: >
-      uv run alembic -c ruixue_agent/persistence/migrations/alembic.ini upgrade head
+      alembic -c ruixue_agent/persistence/migrations/alembic.ini upgrade head
     depends_on:
       postgres:
         condition: service_healthy
@@ -115,7 +117,10 @@ services:
     restart: unless-stopped
     logging: *json_log
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost/api/health"]
+      # ⚠ 用 127.0.0.1 而不是 localhost:容器里 localhost 会先解析成 IPv6 ::1,
+      #   而 `listen 80` 只监听 IPv4 —— 健康检查会一直 Connection refused,
+      #   服务明明是好的却被判成不健康(实测踩过)。
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/api/health"]
       interval: 30s
       timeout: 5s
       retries: 3
