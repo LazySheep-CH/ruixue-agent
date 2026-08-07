@@ -44,6 +44,11 @@ class Hit:
     section_path: list[str]  # 出处:章节路径
     page_start: int
     page_end: int
+    # 文档标题与年份。年份不是"锦上添花的元数据",是【纠错所必需的上下文】:
+    # 库里有 1990~2026 年的资料,不标年份,2023 年文档里的价格就会被当成现价答出去。
+    # 详见 PgRepository.get_documents_meta 的说明。
+    title: str | None = None
+    year: int | None = None
 
 
 class Retriever:
@@ -135,6 +140,9 @@ class Retriever:
 
         # 7. 组装并截断。出处字段(document_id / section_path / 页码)必须携带:
         #    生成层要标引用,使用方要能核实答案来源。
+        top = parents[:k]
+        # 只给【最终返回的这几条】查标题年份 —— 先截断再查,别为被丢弃的候选付查询代价。
+        meta = self.repo.get_documents_meta([p.document_id for p in top])
         return [
             Hit(
                 chunk_id=p.chunk_id,
@@ -144,6 +152,8 @@ class Retriever:
                 section_path=p.section_path,
                 page_start=p.page_start,
                 page_end=p.page_end,
+                title=meta.get(p.document_id, (None, None))[0],
+                year=meta.get(p.document_id, (None, None))[1],
             )
-            for p in parents
-        ][:k]
+            for p in top
+        ]
