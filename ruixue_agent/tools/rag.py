@@ -17,7 +17,7 @@ from ruixue_agent.persistence.engine import get_engine
 from ruixue_agent.persistence.repository import PgRepository
 from ruixue_agent.rag import cache
 from ruixue_agent.rag.bm25 import Bm25Search
-from ruixue_agent.rag.generate import Generator
+from ruixue_agent.rag.generate import Generator, generation_fingerprint
 from ruixue_agent.rag.milvus_store import MilvusVectorStore
 from ruixue_agent.rag.rerank import Reranker
 from ruixue_agent.rag.retriever import Retriever
@@ -73,7 +73,10 @@ def search_knowledge(question: str) -> str:
     # 缓存:同一个问题不重复走"检索+重排+生成"(这条路径含一次 LLM 调用,最贵)。
     # 用【精确匹配】而非语义匹配 —— 实测语义匹配在本领域会把"降解太快/太慢"
     # 判为同一问题(相似度 0.97),给出相反建议。详见 rag/cache.py 的说明。
-    kb_ver = _kb_version()
+    # 缓存版本 = 知识库版本 + 【生成逻辑版本】。
+    # 只用知识库版本是不够的:改了系统规则或资料拼装格式,同一问题就该有不同答案,
+    # 而旧缓存会照样命中 —— 改动对老用户静默失效。详见 generate.generation_fingerprint。
+    kb_ver = f"{_kb_version()}|{generation_fingerprint()}"
     cached = cache.get(question, kb_ver)
     if cached is not None:
         logger.info("知识问答命中缓存")

@@ -8,6 +8,9 @@ PostgreSQL 还是别的存储。SQL 不散落在业务代码中,改列名只动�
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
@@ -18,6 +21,36 @@ from ruixue_agent.persistence.models import ChunkRow, DocumentRow
 # 单次 execute 的批大小。过小则网络往返多;过大则受 PG 单语句 65535 个
 # 占位符上限约束(每行 9 列 × 5000 行 = 45000,留有余量)。
 _BATCH = 5000
+
+
+# 抽取失败时会落进 title 的"假标题":封面页眉、学校名、文档类型。
+# 这些词出现在引用里既没用又占 token,还会让用户以为系统认不出文献。
+_GENERIC_TITLE = re.compile(r"^(硕士|博士|学位论文|.*(大学|学院|研究院|学位论文|专业学位论文)$)")
+# 文件名尾部的副本编号:"..._1.pdf" / "...(2).pdf"
+_COPY_SUFFIX = re.compile(r"[_\-\s]*[(（]?\d+[)）]?$")
+
+
+def display_title(title: str | None, filename: str | None) -> str:
+    """给这篇文档挑一个【人看得懂的名字】。
+
+    ## 为什么不能直接用 title
+
+    实测 1578 篇里有 16% 的 title 是抽取失败的产物:"硕 士 学 位 论 文"、
+    "西北农林科技大学"、空字符串 —— 抓到的是封面页眉,不是标题。
+    而这些文档的【文件名】恰恰就是真标题:
+
+        title = "硕 士 学 位 论 文"
+        filename = "地膜残留对旱地玉米农田土壤理化性状及产量形成的影响.pdf"
+
+    所以规则是:title 看起来像真标题就用它,否则退回文件名。
+    宁可用文件名 —— 它至少是人起的名字,而假标题是纯噪声。
+    """
+    t = re.sub(r"\s+", "", title or "")
+    if len(t) >= 12 and not _GENERIC_TITLE.match(t):
+        return t
+    stem = Path(filename).stem if filename else ""
+    stem = _COPY_SUFFIX.sub("", stem).strip()
+    return stem or t or ""
 
 
 class PgRepository:
@@ -148,6 +181,34 @@ class PgRepository:
 
         by_id = {r.chunk_id: r for r in rows}
         return [by_id[cid] for cid in chunk_ids if cid in by_id]
+
+    def get_documents_meta(
+        self, document_ids: list[str]
+    ) -> dict[str, tuple[str | None, int | None]]:
+        """取文档的 (标题, 年份),给检索结果标出处用。
+
+        ## 为什么值得多查这一次
+
+        知识库里有 1990~2026 年的资料。片段被检索出来时如果不带年份,模型看到的
+        就是一段无时间的事实 —— 于是文档里 2023 年的价格会被当成"现在的价格"
+        答给用户,而用户会拿这个数去采购。实测评测里就出现过。
+
+        靠提示词写"不要把历史价当现价"是**概率性**的;把年份摆到模型眼前是
+        **结构性**的 —— 它没法看不见。能用结构解决的,不要留给模型自觉。
+
+        一次 IN 查询,不是 N+1。
+        """
+        if not document_ids:
+            return {}
+        rows = self.session.execute(
+            select(
+                DocumentRow.document_id,
+                DocumentRow.title,
+                DocumentRow.year,
+                DocumentRow.filename,
+            ).where(DocumentRow.document_id.in_(set(document_ids)))
+        ).all()
+        return {r[0]: (display_title(r[1], r[3]), r[2]) for r in rows}
 
     def get_parents(self, child_ids: list[str]) -> list[ChunkRow]:
         """给定子块 ID,返回其父块,去重且保序。

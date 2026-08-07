@@ -56,6 +56,11 @@ class FakeRepo:
     def get_chunks(self, chunk_ids):
         return [self.rows[i] for i in chunk_ids if i in self.rows]
 
+    def get_documents_meta(self, document_ids):
+        """检索层要给每条结果标上标题和年份(见 PgRepository.get_documents_meta)。
+        假 repo 里返回固定值即可 —— 这里测的是编排,不是元数据本身。"""
+        return {d: (f"标题-{d}", 2023) for d in document_ids}
+
     def get_parents(self, child_ids):
         children = self.get_chunks(child_ids)
         pids = list(dict.fromkeys(c.parent_id for c in children if c.parent_id))
