@@ -159,6 +159,10 @@ def drained():
     """容量类测试共享全局在途计数,跑之前/之后都要等它清空,否则互相干扰
     (前一个测试没跑完的任务会把后一个直接顶到容量上限)。"""
 
+    # 这些用例共享模块级全局(计数、线程池、停机标志)。不复位的话,
+    # 前一个用例的残留会让后一个直接顶到容量上限或被"停机中"拒绝。
+    runs._shutting_down = False
+
     def wait():
         for _ in range(60):
             if runs.inflight_count() == 0:
@@ -168,6 +172,7 @@ def drained():
 
     wait()
     yield
+    runs._shutting_down = False
     wait()
 
 
@@ -217,3 +222,45 @@ def test_failed_task_also_releases_slot(drained, monkeypatch):
         if runs.inflight_count() == 0:
             break
     assert runs.inflight_count() == 0, "失败的任务没有释放名额"
+
+
+# ── 停机:每次重新部署都会走这条路 ──────────────────────────────
+def test_shutdown_rejects_new_runs(drained, monkeypatch):
+    """停机时还收新活 = 白花一次模型钱(它注定跑不完)。"""
+    monkeypatch.setattr(runs, "_shutting_down", True)
+    try:
+        with pytest.raises(runs.CapacityError, match="重启"):
+            runs.start_background("sd1", lambda: None)
+    finally:
+        monkeypatch.setattr(runs, "_shutting_down", False)
+
+
+def test_shutdown_waits_for_inflight_then_returns_zero(drained, monkeypatch):
+    """在途的要给机会跑完 —— 大多数几十秒内能结束,不该一律砍掉。"""
+    monkeypatch.setattr(runs, "MAX_CONCURRENT_RUNS", 2)
+    runs.start_background("sd2", lambda: time.sleep(0.3))
+    try:
+        assert runs.shutdown(timeout=10) == 0, "在途跑完了就不该有被标记失败的"
+    finally:
+        runs._shutting_down = False
+
+
+def test_shutdown_marks_stragglers_failed_immediately(drained, monkeypatch):
+    """超过宽限期还没完的,必须【立刻】落库为失败。
+
+    不做的话它在库里挂着 running,用户要对着转圈等到 15 分钟后 reap_stale 才知道。
+    宁可明确说"服务重启了,请重发",也不要让人等一个永远不回来的答案。
+    """
+    monkeypatch.setattr(runs, "MAX_CONCURRENT_RUNS", 2)
+    rid = runs.create_run("alice", "alice:sd", "停机测试")
+    runs.start_background(rid, lambda: time.sleep(3))
+    try:
+        assert runs.shutdown(timeout=1) == 1
+        row = runs.get_run(rid, "alice")
+        assert row.status == "failed" and "重启" in (row.error or "")
+    finally:
+        runs._shutting_down = False
+        for _ in range(60):
+            if runs.inflight_count() == 0:
+                break
+            time.sleep(0.1)
