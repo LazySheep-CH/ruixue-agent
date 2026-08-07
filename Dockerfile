@@ -38,7 +38,12 @@ RUN uv sync --frozen --no-dev --no-install-project
 #    构建机连不上 HF 时:--build-arg HF_ENDPOINT=https://hf-mirror.com 走镜像站。
 ARG HF_ENDPOINT=""
 ENV HF_HOME=/opt/hf
-RUN HF_ENDPOINT="$HF_ENDPOINT" uv run --no-project python -c "\
+# 直接用上一步 uv sync 建好的 venv 里的 python。
+# ⚠ 不能用 `uv run --no-project`:--no-project 的意思正是"忽略本项目环境",
+#   于是它在一个临时空环境里跑,import sentence_transformers 直接失败。
+#   也不用裸 `uv run`:此时项目本身还没装(--no-install-project),uv 会试图去装。
+#   指名道姓调 .venv 的解释器最直接,也最不容易被工具语义变化坑到。
+RUN HF_ENDPOINT="$HF_ENDPOINT" /app/.venv/bin/python -c "\
 from sentence_transformers import SentenceTransformer; \
 SentenceTransformer('BAAI/bge-small-zh-v1.5')"
 

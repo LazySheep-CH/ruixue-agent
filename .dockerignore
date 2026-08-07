@@ -1,20 +1,54 @@
 # 打镜像时【不】拷进去的东西 —— 减小镜像、加快构建、避免泄密。
+#
+# ⚠⚠ 语法陷阱:.dockerignore 只支持【整行注释】,不支持行尾注释。
+#     写成  data/    # 原始数据不进镜像
+#     Docker 会把整行(含空格和中文)当作一个字面模式去匹配,于是这条规则
+#     **静默失效**,既不报错也没有任何提示。
+#
+#     实测代价:本文件原本就是这么写的,结果 data/(4.2G)、backups/(158M)
+#     全被打进构建上下文 —— 光传上下文 5 分钟、5.65GB;更要命的是
+#     `.env` 和 `config/config.yaml` 这两条【保护密钥】的规则也一起失效了,
+#     API Key 就这么进了镜像。
+#
+#     所以:注释一律单独一行。改完请用下面这条命令核对上下文大小:
+#         docker build --no-cache --progress=plain -f Dockerfile . 2>&1 | grep "transferring context"
+
+# ── 虚拟环境与缓存 ──
 .venv/
 __pycache__/
 *.pyc
 .pytest_cache/
 .pytest_tmp/
+.ruff_cache/
+
+# ── 版本控制与 CI ──
 .git/
 .github/
-data/                 # 原始/中间数据,不进镜像
+
+# ── 数据与产物(4.2G,重跑管道就有,绝不进镜像)──
+data/
+mineru-out/
+backups/
+outputs/
+runs/
+
+# ── 前端有自己的镜像(frontend/Dockerfile),别把 node_modules 塞进后端 ──
+frontend/
+
+# ── 文档与设计稿 ──
 docs/
 tests/
-*.md
-frontend/             # 前端有自己的镜像(frontend/Dockerfile),别把 node_modules 塞进后端
-backups/              # 数据库备份,几百 MB,绝不进镜像
-outputs/              # 训练/分析的中间产物
 design-system/
-# 注意 models/ 【不】排除 —— 预测模型产物必须随镜像走(见 Dockerfile ④)。
-# scripts/ 也不排除:训练脚本不大,但报错信息里会让用户去跑它,留着方便排查。
-.env                  # 密钥绝不进镜像!
-config/config.yaml    # 本地配置(含 key),运行时用挂载/环境变量注入
+.impeccable/
+*.md
+
+# ── 其他工具的工作目录(含 node_modules)──
+.codex-work/
+
+# ── 密钥:绝不进镜像。凭据一律运行时用环境变量注入 ──
+.env
+.env.*
+config/config.yaml
+
+# ⚠ models/ 【不】排除 —— 预测模型产物必须随镜像走(见 Dockerfile ④)。
+# ⚠ scripts/ 也不排除:训练脚本不大,而且报错信息里会让用户去跑它。

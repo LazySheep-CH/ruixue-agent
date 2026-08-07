@@ -30,6 +30,7 @@ import json
 import logging
 import os
 import threading
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
@@ -170,38 +171,121 @@ MAX_CONCURRENT_RUNS = int(os.getenv("MAX_CONCURRENT_RUNS", "8"))
 # 宁可明确告诉他"现在忙,稍后再试",也不要让他盯着转圈等 5 分钟。
 MAX_QUEUED_RUNS = int(os.getenv("MAX_QUEUED_RUNS", "16"))
 
-_executor = ThreadPoolExecutor(max_workers=MAX_CONCURRENT_RUNS, thread_name_prefix="run")
+# 收到停止信号后,最多等在途运行多久(秒)。
+#
+# 上界由【容器编排给的宽限期】决定:docker stop 默认 10s 后 SIGKILL,
+# compose 里已把它调到 60s(stop_grace_period)。这里取 45s,留 15s 给
+# 收尾落库 —— 等超过宽限期毫无意义,那时进程已经被强杀了。
+SHUTDOWN_DRAIN_SECONDS = int(os.getenv("SHUTDOWN_DRAIN_SECONDS", "45"))
+
+# 线程池【惰性创建】而不是模块加载时就建。
+# 理由:shutdown() 会把它彻底关掉,关掉的池不能再 submit。惰性创建让"停机后
+# 再启动"这件事天然成立 —— 测试要反复走停机流程,而生产上万一有人写了
+# 重启逻辑也不会拿到一个死池。
+_executor: ThreadPoolExecutor | None = None
 _inflight = 0  # 已提交但未完成的运行数(排队中 + 执行中)
 _inflight_lock = threading.Lock()
+_shutting_down = False
+# 本进程当前负责的 run_id。停机时要能把没跑完的这些【立刻】标记失败 ——
+# 否则它们会在库里挂着 running,用户对着转圈等到 15 分钟后才被 reap_stale 清理。
+_owned: set[str] = set()
 
 
 class CapacityError(RuntimeError):
     """系统当前容量已满 —— 调用方应转成 503 告诉用户稍后再试。"""
 
 
+def _get_executor() -> ThreadPoolExecutor:
+    """取线程池,没有就建。调用方已持有 _inflight_lock。"""
+    global _executor
+    if _executor is None:
+        _executor = ThreadPoolExecutor(max_workers=MAX_CONCURRENT_RUNS, thread_name_prefix="run")
+    return _executor
+
+
 def start_background(run_id: str, target, *args) -> None:
-    """把一次运行提交到有界线程池。容量满时抛 CapacityError。
+    """把一次运行提交到有界线程池。容量满 / 正在停机时抛 CapacityError。
 
     为什么用线程而不是 asyncio task:agent 调用链(模型、Milvus、树模型)全是
     同步阻塞的,放进事件循环会把整个 worker 卡死。
     """
     global _inflight
     with _inflight_lock:
+        # 已经在停机了就别再收新活 —— 收了也跑不完,只是白花一次模型钱。
+        if _shutting_down:
+            raise CapacityError("服务正在重启")
         if _inflight >= MAX_CONCURRENT_RUNS + MAX_QUEUED_RUNS:
             raise CapacityError("并发已达上限")
         _inflight += 1
+        _owned.add(run_id)
+        pool = _get_executor()
 
-    def _wrapped():
+    def _release(_future):
+        """名额归还。挂在 future 的完成回调上,而不是写在任务体的 finally 里。
+
+        为什么:停机时 cancel_futures=True 会取消【还没开始跑】的任务 ——
+        那些任务体一次都不执行,写在 finally 里的归还永远不会发生,计数就永久
+        泄漏了:系统明明空闲,却一直以为满载,之后所有请求被 503 挡在门外。
+        done_callback 对【正常完成 / 抛异常 / 被取消】三种结局都会触发。
+        """
         global _inflight
-        try:
-            target(*args)
-        finally:
-            with _inflight_lock:
-                _inflight -= 1
+        with _inflight_lock:
+            _inflight -= 1
+            _owned.discard(run_id)
 
-    _executor.submit(_wrapped)
+    pool.submit(target, *args).add_done_callback(_release)
 
 
 def inflight_count() -> int:
     """当前在跑 + 排队的运行数(供 /health 或排查用)。"""
     return _inflight
+
+
+def shutdown(timeout: int = SHUTDOWN_DRAIN_SECONDS) -> int:
+    """停机流程:停收新活 → 等在途跑完 → 剩下的立刻标记失败。返回被标记失败的条数。
+
+    ## 不做这件事会怎样
+
+    每次重新部署都会发 SIGTERM。uvicorn 只等【HTTP 请求】排空,而 agent 跑在
+    后台线程里、**不绑任何 HTTP 请求** —— 于是线程被直接砍掉:
+        · 用户的答案没了,而模型的钱已经花掉了
+        · 库里那条记录还写着 running,用户对着转圈等到下次启动 reap_stale
+          才被标记失败 —— 那是 15 分钟以后的事
+
+    所以停机要主动做三件事,而不是"什么都不做等被杀":
+        1. 关门:新请求直接 503(顺带让负载均衡把流量切走)
+        2. 等:给在途的运行一段有界时间跑完 —— 大多数几十秒内能结束
+        3. 兜底:还没完的立刻落库为失败,并给用户看得懂的原因
+
+    第 3 步是关键。**宁可明确告诉用户"服务重启了,请重发",也不要让他等一个
+    永远不会回来的答案。**
+
+    超时上界由容器宽限期决定,等超过宽限期没有意义 —— 那时已经被 SIGKILL 了。
+    """
+    global _shutting_down, _executor
+    with _inflight_lock:
+        _shutting_down = True
+        pool, _executor = _executor, None
+    # cancel_futures:还在排队、一次都没跑过的直接取消,别浪费宽限期
+    if pool is not None:
+        pool.shutdown(wait=False, cancel_futures=True)
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        with _inflight_lock:
+            if _inflight == 0:
+                logger.info("停机:在途运行已全部完成")
+                return 0
+        time.sleep(0.2)
+
+    with _inflight_lock:
+        stragglers = list(_owned)
+    for rid in stragglers:
+        try:
+            finish_run(rid, error="服务重启,本次运行未能完成,请重新提问")
+            publish(rid, {"type": "error", "message": "服务重启,请重新提问"})
+        except Exception:  # 停机路径上不能因为一条记录写失败就卡住
+            logger.warning("停机标记运行 %s 失败", rid, exc_info=True)
+    if stragglers:
+        logger.warning("停机:%d 个运行超过 %ds 未完成,已标记失败", len(stragglers), timeout)
+    return len(stragglers)
