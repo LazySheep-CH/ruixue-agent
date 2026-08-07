@@ -28,8 +28,17 @@ say "前置检查"
 grep -q '^JWT_SECRET=.\+' docker/.env.prod || die "docker/.env.prod 里 JWT_SECRET 为空,必须设置"
 grep -q '^DEEPSEEK_API_KEY=sk-' docker/.env.prod || die "docker/.env.prod 里 DEEPSEEK_API_KEY 没填"
 
+# 端口/镜像标签写错文件是【静默失效】,必须主动拦。
+# compose 的 ${VAR} 插值只读 docker/.env;env_file(.env.prod)只影响容器【内部】。
+# 写进 .env.prod 的 HTTP_PORT 不会改变实际映射,却会让人以为改了 —— 我踩过。
+for k in HTTP_PORT HTTPS_PORT APP_TAG UVICORN_WORKERS; do
+  grep -q "^$k=" docker/.env.prod 2>/dev/null &&     die "$k 写在了 docker/.env.prod,但 compose 插值只读 docker/.env —— 会静默失效。请挪过去。"
+done
+
 # 预测模型产物必须在本机 —— 镜像靠它构建(models/ 不进 git,见 Dockerfile ④)
-for m in dr wvtr ts; do
+# ⚠ 大小写必须和 predictors/schema.py 里 MODELS 的 key 一致(DR/WVTR/TS)。
+# Windows 上写小写也能过(NTFS 不区分大小写),Linux 容器里就找不到文件。
+for m in DR WVTR TS; do
   [ -f "models/predictors/$m/${m}_model.joblib" ] || \
     die "缺预测模型 models/predictors/$m/,先训练:uv run python scripts/train/train.py $m"
 done
@@ -56,12 +65,13 @@ $COMPOSE up -d --wait app web nginx
 # ── 5. 冒烟验证:不通过就不算部署成功 ─────────────────────────
 # "容器起来了"不等于"服务能用"。必须打一次真实请求。
 say "冒烟验证"
-PORT="$(grep -E '^HTTP_PORT=' docker/.env.prod | cut -d= -f2 || echo 80)"
+# 从 docker/.env 读(compose 插值的唯一来源),不是 .env.prod
+PORT="$(grep -E '^HTTP_PORT=' docker/.env 2>/dev/null | cut -d= -f2)"
 for i in $(seq 1 30); do
-  if curl -fsS "http://localhost:${PORT:-80}/api/health/ready" >/dev/null 2>&1; then
+  if curl -fsS "http://127.0.0.1:${PORT:-80}/api/health/ready" >/dev/null 2>&1; then
     echo "  ✓ /api/health/ready 通过"
-    curl -fsS "http://localhost:${PORT:-80}/" >/dev/null && echo "  ✓ 前端页面可访问"
-    say "部署完成 → http://localhost:${PORT:-80}"
+    curl -fsS "http://127.0.0.1:${PORT:-80}/" >/dev/null && echo "  ✓ 前端页面可访问"
+    say "部署完成 → http://127.0.0.1:${PORT:-80}"
     exit 0
   fi
   sleep 2
