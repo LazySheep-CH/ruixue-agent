@@ -5,6 +5,7 @@
 前置:  docker 起着(agent 要调 RAG)。
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -55,7 +56,9 @@ async def lifespan(app: FastAPI):
     # 停机:停收新活 → 等在途 agent 跑完 → 剩下的立刻标记失败。
     # 不做的话,每次重新部署都会把正在跑的运行连人带钱一起丢掉,
     # 而且用户要对着转圈等 15 分钟才被 reap_stale 清理。详见 runs.shutdown。
-    runs.shutdown()
+    # 放线程里跑:shutdown 内部要轮询等待(同步阻塞)最多 45 秒。
+    # 直接在 async 函数里调会【卡死事件循环】—— 连正在收尾的 SSE 都发不出去。
+    await asyncio.to_thread(runs.shutdown)
 
 
 app = FastAPI(title="瑞雪地膜智能助手", lifespan=lifespan)
