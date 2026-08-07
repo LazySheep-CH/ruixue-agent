@@ -69,6 +69,17 @@ services:
     # ——直连就绕过了 nginx 上的 TLS、超时和请求体限制。
     expose: ["8000"]
     restart: unless-stopped
+    # 给足停机宽限期:agent 跑在后台线程里,收到 SIGTERM 后要把在途运行跑完
+    # (见 runs.shutdown,内部等 45s)。默认只有 10s —— 到点直接 SIGKILL,
+    # 正在生成的答案连人带钱一起丢。
+    stop_grace_period: 60s
+    logging: &json_log
+      driver: json-file
+      options:
+        # ⚠ Docker 默认 json-file 【没有上限】。一个话痨服务能把磁盘写满,
+        #   然后整台机器上所有容器一起挂 —— 这是最常见的"半夜全站宕机"原因之一。
+        max-size: "50m"
+        max-file: "5"
     # 崩了要能自动拉起,但也要防"崩溃-重启"死循环把 CPU 打满。
     deploy:
       resources:
@@ -85,6 +96,7 @@ services:
     expose: ["3000"]
     depends_on: [app]
     restart: unless-stopped
+    logging: *json_log
 
   # ── Nginx:唯一公网入口 ───────────────────────────────────────
   nginx:
@@ -101,6 +113,7 @@ services:
       - ./nginx/www:/var/www/certbot          # certbot HTTP-01 验证用
     depends_on: [app, web]
     restart: unless-stopped
+    logging: *json_log
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost/api/health"]
       interval: 30s

@@ -51,8 +51,11 @@ async def lifespan(app: FastAPI):
     # 用户会一直等一个永远不会完成的运行。启动时统一标记为失败。
     runs.reap_stale()
     yield
-    # ↑ yield 前是"启动";yield 后是"关闭"。关闭时的清理写在这下面
-    #   (目前没有要清理的资源,先留空)。
+    # ↑ yield 前是"启动";yield 后是"关闭"。
+    # 停机:停收新活 → 等在途 agent 跑完 → 剩下的立刻标记失败。
+    # 不做的话,每次重新部署都会把正在跑的运行连人带钱一起丢掉,
+    # 而且用户要对着转圈等 15 分钟才被 reap_stale 清理。详见 runs.shutdown。
+    runs.shutdown()
 
 
 app = FastAPI(title="瑞雪地膜智能助手", lifespan=lifespan)
