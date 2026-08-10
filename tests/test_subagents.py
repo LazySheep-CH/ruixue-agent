@@ -80,3 +80,78 @@ def test_expert_cannot_delegate_further():
     for name, spec in sub._EXPERTS.items():
         tool_names = [t.name for t in spec["tools"]]
         assert "delegate_to_expert" not in tool_names, f"专家「{name}」不该持有 delegate 工具"
+
+
+# ── 子 agent 可观测性 ────────────────────────────────────────────
+def test_subagent_tokens_and_inner_tools_are_collected():
+    """子 agent 的消息不进父状态,所以它烧的 token 原本【一分钱不算】,
+    内部调了什么工具也完全是黑箱。发生委派时成本统计就偏低,而版本对比正是拿它比的。"""
+    from unittest.mock import patch
+
+    from langchain_core.messages import AIMessage
+
+    from ruixue_agent.subagents import collect_subagent_runs, delegate_to_expert
+
+    fake = {
+        "messages": [
+            AIMessage(
+                content="",
+                id="s1",
+                tool_calls=[{"name": "search_knowledge", "args": {}, "id": "t1"}],
+                usage_metadata={"input_tokens": 1200, "output_tokens": 80, "total_tokens": 1280},
+            ),
+            AIMessage(
+                content="专家的结论",
+                id="s2",
+                usage_metadata={"input_tokens": 1500, "output_tokens": 200, "total_tokens": 1700},
+            ),
+        ]
+    }
+
+    class FakeAgent:
+        def invoke(self, *a, **k):
+            return fake
+
+    with patch("ruixue_agent.subagents._build_expert", return_value=FakeAgent()):
+        with collect_subagent_runs() as runs:
+            out = delegate_to_expert.invoke({"expert": "文献检索专家", "task": "查国标"})
+
+    assert out == "专家的结论", "主 agent 拿到的仍只是结论,接口没变"
+    assert len(runs) == 1
+    r = runs[0]
+    assert r.sub_run_id.startswith("sa-") and r.expert == "文献检索专家"
+    assert r.tools == ["search_knowledge"], "专家内部调的工具必须可见"
+    assert (r.input_tokens, r.output_tokens) == (2700, 280), "子 agent 的 token 必须被算进来"
+
+
+def test_trace_total_tokens_includes_subagents():
+    """成本指标必须把子 agent 算进去,否则版本成本对比是错的。"""
+    from ruixue_agent.eval.trace import Trace
+    from ruixue_agent.subagents import SubAgentRun
+
+    tr = Trace(case_id="c", input_tokens=1000, output_tokens=100)
+    assert tr.total_tokens == 1100
+    tr.subagent_runs = [
+        SubAgentRun("sa-1", "文献检索专家", "t", ["search_knowledge"], 2700, 280, 900, True)
+    ]
+    assert tr.total_tokens == 4080
+    assert tr.all_tool_names == ["search_knowledge"]
+
+
+def test_failed_delegation_is_also_recorded():
+    """专家崩了也要留账 —— 否则排查时只看到主 agent 报错,不知道是哪次委派炸的。"""
+    from unittest.mock import patch
+
+    import pytest
+
+    from ruixue_agent.subagents import collect_subagent_runs, delegate_to_expert
+
+    class Boom:
+        def invoke(self, *a, **k):
+            raise RuntimeError("专家挂了")
+
+    with patch("ruixue_agent.subagents._build_expert", return_value=Boom()):
+        with collect_subagent_runs() as runs:
+            with pytest.raises(RuntimeError):
+                delegate_to_expert.invoke({"expert": "文献检索专家", "task": "x"})
+    assert len(runs) == 1 and runs[0].ok is False and runs[0].error == "RuntimeError"
