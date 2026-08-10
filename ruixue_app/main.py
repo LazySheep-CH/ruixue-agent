@@ -51,6 +51,13 @@ async def lifespan(app: FastAPI):
     # 清理残留:进程上次被 kill 时,后台任务没了但库里还写着 running,
     # 用户会一直等一个永远不会完成的运行。启动时统一标记为失败。
     runs.reap_stale()
+    # 记忆库幂等建表(和文档库一样,启动时确保存在)
+    try:
+        from ruixue_agent.memory.store import ensure_collection
+
+        ensure_collection()
+    except Exception:
+        logging.getLogger("ruixue.app").warning("记忆库初始化失败,长期记忆将不可用", exc_info=True)
     yield
     # ↑ yield 前是"启动";yield 后是"关闭"。
     # 停机:停收新活 → 等在途 agent 跑完 → 剩下的立刻标记失败。
@@ -290,8 +297,43 @@ def _execute_run(run_id: str, thread_id: str, message: str) -> None:
         runs.publish(run_id, {"type": "done"})
         return
 
-    runs.finish_run(run_id, answer="".join(answer_parts))
+    answer = "".join(answer_parts)
+    runs.finish_run(run_id, answer=answer)
     runs.publish(run_id, {"type": "done"})
+
+    # 长期记忆写入放在【最后】,而且在 done 事件之后。
+    #
+    # 顺序是刻意的:用户已经拿到答案、连接已经可以关了,记忆抽取多花的
+    # 一两秒完全不占他的等待时间。反过来放在 finish_run 之前的话,
+    # 每个用户都要为一件他根本感知不到的事多等一会。
+    #
+    # 而且它整个包在 try 里:记忆是锦上添花,抽取或存储失败绝不能
+    # 让一次【已经成功】的运行看起来像失败了。
+    try:
+        _remember_async(thread_id, message, answer, run_id)
+    except Exception:
+        logger.warning("长期记忆写入失败(不影响本次回答)", exc_info=True)
+
+
+def _remember_async(thread_id: str, question: str, answer: str, run_id: str) -> None:
+    """抽取并存入长期记忆。
+
+    thread_id 形如 "alice:t1",前缀就是 user_id(命名空间隔离的副产品)。
+    拿不到用户身份就不记 —— 记忆按用户隔离,没身份的记忆无处安放,
+    硬塞给一个默认用户等于让所有人共用一份记忆,是数据泄露。
+    """
+    user_id = thread_id.split(":", 1)[0] if ":" in thread_id else ""
+    if not user_id or not answer.strip():
+        return
+    from ruixue_agent.memory import remember
+    from ruixue_agent.memory.extract import extract_facts
+
+    facts = extract_facts(question, answer)
+    if not facts:
+        return  # 没有值得长期记住的 —— 这是常态,不是失败
+    n = remember(user_id, facts, run_id=run_id)
+    if n:
+        logger.info("run=%s 新增长期记忆 %d 条", run_id, n)
 
 
 def _sse(event: dict) -> str:

@@ -267,3 +267,71 @@ class RunRow(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class MemoryRow(Base):
+    """长期记忆:跨会话记住这个用户的事实。
+
+    ## 为什么需要长期记忆(先讲问题)
+
+    老王上周说过"我在尉犁有 50 亩地种棉花"。这周他问"帮我算下用量" ——
+    没有长期记忆的话,系统只能反问他面积,因为上周的对话早不在上下文里了。
+    短期记忆(滑动窗口 + 摘要)只在【一次会话内】有效,会话一结束就没了。
+
+    ## 决定一:存【抽取出的事实】,不存原始对话
+
+    两种做法的取舍:
+        存原始对话  —— 实现简单,但检索噪声大(半句闲聊也会被召回)、
+                       浪费 token、而且用户想删某条信息时无从下手。
+        存抽取的事实 —— 多一次 LLM 调用的成本,换来:精准、可审计、
+                       可按条删除(隐私合规的前提)、token 省。
+
+    我们选后者。地膜场景的记忆高度结构化(地点/面积/作物/配方/生育期),
+    抽成事实几乎没有信息损失,反而把闲聊噪声滤掉了。
+
+    ## 决定二:为什么不只用关系库(面经必追的一问)
+
+    "既然是存用户偏好标签,为什么不用 MySQL?" —— 因为记忆有两种查法:
+        精确查:"这个用户的地块在哪" → 关系库,一条 SQL
+        语义查:"当前这个问题,和用户以前说过的什么有关" → 只能靠向量
+
+    第二种是关系库做不到的:用户说过"我这边风大",现在问"选哪种配方",
+    关键词一个都不重合,但语义上高度相关(风大 → 要看拉伸强度)。
+
+    所以我们【两边都存】:事实进这张表(可查、可编辑、可删除、可审计),
+    同时把事实文本向量化进 Milvus 做语义召回。**PG 是权威,向量是索引**
+    —— 和文档那套完全一样的分工,向量丢了重建即可。
+
+    ## 决定三:什么时候写
+
+    一次运行【结束之后】异步抽取,不阻塞用户。抽取失败不影响主流程 ——
+    记忆是锦上添花,不能因为它拖垮回答。
+    """
+
+    __tablename__ = "memories"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # 内容寻址:同一个用户重复说同一件事,不会存两条(sha256 前 16 位)
+    memory_id: Mapped[str] = mapped_column(String(16), primary_key=False, unique=True, index=True)
+    user_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    # 事实分类。分类不是装饰:检索时可以按类过滤(算用量只需要 plot 类),
+    # 用户想删"我的地块信息"时也能按类批量删。
+    kind: Mapped[str] = mapped_column(
+        String(24), nullable=False, comment="plot=地块 / crop=作物 / preference=偏好 / other"
+    )
+    text: Mapped[str] = mapped_column(Text, nullable=False, comment="抽取出的事实,一句话")
+    # 血缘:这条记忆是哪次运行抽出来的。用户质疑"你怎么知道我有50亩地"时能回溯。
+    source_run_id: Mapped[str | None] = mapped_column(String(36), index=True)
+    # 置信度低的先存但不注入,留人工/后续确认。目前抽取器只产出 high/low 两档。
+    confidence: Mapped[str] = mapped_column(String(8), nullable=False, server_default="high")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    # 软删除:用户删记忆时置位,不物理删 —— 保留审计痕迹,也避免下次又被抽出来
+    deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+
+    __table_args__ = (
+        # 检索主路径:按用户 + 未删除 取记忆
+        Index("idx_memories_user_alive", "user_id", "deleted"),
+        {"comment": "长期记忆。一行 = 关于某用户的一条事实"},
+    )
