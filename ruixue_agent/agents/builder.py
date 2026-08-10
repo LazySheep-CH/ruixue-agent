@@ -9,6 +9,7 @@ from langchain.agents.middleware import (
 )
 
 from ruixue_agent.agents.middlewares import (
+    MemoryRecallMiddleware,
     PromptInjectionGuardMiddleware,
     SkillInjectionMiddleware,
     TimingLoggingMiddleware,
@@ -92,6 +93,10 @@ def _build_middleware(summary_model_name: str, require_approval: bool) -> list:
         # ⓪.5 作业规程注入:按提问场景注入已验证的 SOP(skills/*.md),
         #     告诉模型"这类问题该怎么做"。只在首轮注入,省 token。
         SkillInjectionMiddleware(),
+        # ⓪.6 长期记忆注入:技能是"这类问题该怎么做"(对所有人一样),
+        #     记忆是"这个用户是谁"(因人而异)。两者都属于"开工前先给背景",
+        #     所以挨着放。同样只在首轮注入。
+        MemoryRecallMiddleware(),
         # ① 死循环刹车:已经到上限就该立刻停,不能先花钱做摘要、再发现"哦该停了"。
         ModelCallLimitMiddleware(
             run_limit=MAX_MODEL_CALLS_PER_RUN,
