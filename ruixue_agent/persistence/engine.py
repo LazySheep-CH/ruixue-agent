@@ -47,13 +47,22 @@ def get_engine() -> Engine:
 
     池大小怎么定 —— 要和【实际并发】对齐,不是拍个数:
 
-        每个 worker 进程的用量 ≈ 后台运行并发(默认 8,见 runs.MAX_CONCURRENT_RUNS)
-                                + SSE/查询等短请求若干
-        本池 10+10 = 20 条,再加 checkpointer 自己的池(5 条)≈ 25 条/worker
+        ⚠ 【2026-08-10 实测修正】原来这里按"每 worker 满池 30 条"推算,
+          得出"最多 3~4 个 worker"。**压测实测发现这个算式过于保守约一倍**:
 
-        PostgreSQL 默认 max_connections=100 → 最多约 4 个 worker(100 ÷ 25)。
-        起更多 worker 前必须同步调大 PG 的 max_connections,否则新 worker
-        会拿不到连接、请求直接失败 —— 这是扩容时最容易踩的坑。
+              4 个 worker 压测中,PG 实际连接数只有 54/100(不是预测的 120)
+
+          原因:SQLAlchemy 的连接池是【懒建】的 —— pool_size=10 是"最多留 10 条
+          空闲",不是"启动就占 10 条"。实际用多少建多少。
+          所以那个算式是【最坏情况上界】,不是实际用量;拿它当扩容红线会
+          白白限制住本可以加的 worker。
+
+        真正的红线【不是连接数,是内存】—— 见 runs.py 里 MAX_CONCURRENT_RUNS
+        上面的压测记录:每个 worker 要各自加载一份嵌入模型 + 三个树模型,
+        约 520MB;4GB 上限下最多 7 个,8 个就撞顶、16 个直接雪崩。
+
+        连接数仍要监控(下面这条 SQL),但它不是当前的瓶颈:
+            SELECT count(*) FROM pg_stat_activity WHERE datname='ruixue';
 
     池太小会怎样:请求排队等连接,表现为"莫名其妙变慢",很难查。
     池太大也不行:PG 每条连接都是一个进程,几百条会把数据库拖垮。
