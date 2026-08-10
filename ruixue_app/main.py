@@ -322,7 +322,12 @@ def _stream_run(run_id: str, from_start: bool):
                 if ev.get("type") == "done":
                     return
 
-    return StreamingResponse(gen(), media_type="text/event-stream")
+    # X-Accel-Buffering 是【响应头】:由后端贴在响应上、代理读它。
+    # 曾配反过 —— 写成 nginx 的 proxy_set_header(那是贴在"寄给后端的请求"上,
+    # 后端看了也没用),流式一直只靠 proxy_buffering off 单锁在撑。
+    return StreamingResponse(
+        gen(), media_type="text/event-stream", headers={"X-Accel-Buffering": "no"}
+    )
 
 
 @app.post("/chat/stream")
@@ -379,5 +384,6 @@ def resume_run_stream(run_id: str, user_id: str = Depends(get_current_user)):
                 ]
             ),
             media_type="text/event-stream",
+            headers={"X-Accel-Buffering": "no"},
         )
     return _stream_run(run_id, from_start=True)
