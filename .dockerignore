@@ -26,7 +26,16 @@ __pycache__/
 .github/
 
 # ── 数据与产物(4.2G,重跑管道就有,绝不进镜像)──
-data/
+#
+# ⚠ 用 data/* 而不是 data/ —— 整目录被忽略时,下面的例外行不生效。
+#   (和 .gitignore 里同样的写法,同样的理由。)
+data/*
+# 例外:data/predictors/ 只有 1.2MB,但 county_soil.csv / county_latlon.csv
+# 是【运行时刚需】—— 土壤查询、按地点预测都要读它们。
+# 实测踩过:整个 data/ 排掉后,容器里的工具全报 FileNotFoundError,
+# 而且是【线上静默失败】——用户直接看到 "FileNotFoundError" 这种字眼。
+# 比 models/ 那次更坏:那次构建期就炸了,这次一路跑到用户面前。
+!data/predictors/
 mineru-out/
 backups/
 outputs/
