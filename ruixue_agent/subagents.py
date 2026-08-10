@@ -12,6 +12,8 @@
   从根上杜绝"无限递归派活"。
 """
 
+from functools import cache
+
 from langchain.agents import create_agent
 from langchain_core.tools import tool
 
@@ -21,10 +23,15 @@ from ruixue_agent.tools.environment import get_climate_info, get_soil_info
 from ruixue_agent.tools.optimize import screen_film_recipes
 from ruixue_agent.tools.rag import search_knowledge
 
-# ── 专家注册表:专家名 -> {工具集, 系统提示}。加专家 = 加一条 ──────────
+# ── 专家注册表:专家名 -> {描述, 工具集, 系统提示}。加专家 = 加一条 ──────────
 # 注意:这里【不放】delegate 工具进任何专家 —— 专家不能再派活(防递归)。
+#
+# description 字段不是注释,是【给主 agent 看的路由依据】:它会被拼进
+# delegate_to_expert 的工具描述(见文件末尾)。写清楚"什么时候派给它",
+# 主 agent 才派得准。
 _EXPERTS: dict[str, dict] = {
     "文献检索专家": {
+        "description": "深挖文献与标准条文:需要多轮检索、汇总多篇资料、给出处引用时派它",
         "tools": [search_knowledge],
         "prompt": (
             "你是地膜领域的文献检索专家。只依据检索到的材料回答,"
@@ -32,6 +39,7 @@ _EXPERTS: dict[str, dict] = {
         ),
     },
     "配方优化专家": {
+        "description": "为某地某作物推荐配方:要批量对比候选配方、权衡三大性能并给取舍理由时派它",
         # 给它"批量试算"而不是单个预测工具:一次拿到全部候选的对比表,
         # 少转很多圈 LLM 循环(省钱省时)。再配环境查询和知识库供佐证。
         "tools": [screen_film_recipes, get_soil_info, get_climate_info, search_knowledge],
@@ -59,11 +67,19 @@ _EXPERTS: dict[str, dict] = {
 _ = estimate_film_usage
 
 
+@cache
 def _build_expert(name: str, model_name: str = "deepseek-v4-flash"):
-    """按注册表造一个专家子 agent。
+    """按注册表造一个专家子 agent。**构建一次,之后查缓存复用。**
 
-    刻意【不传 checkpointer】:每次委派都是一次性、无状态的独立执行 —— 这正是
+    为什么要缓存:agent 图的编译 + 模型客户端创建,实测每次约 127ms ——
+    没缓存时【每次派活都重付一遍】。deepagents 的 SubAgentMiddleware 也是
+    同一做法:在中间件构造时把所有子 agent 编译好,task 工具只查字典。
+
+    复用实例安全吗?安全,关键在下面这条:
+    刻意【不传 checkpointer】:agent 图本身是无状态的(状态全在 invoke 传入的
+    messages 里),没有 checkpointer 就没有任何跨调用的残留 —— 这正是
     "上下文隔离"(专家不背主对话的历史包袱,主 agent 也不被专家的中间步骤污染)。
+    同一个图对象被并行调用也互不干扰,LangGraph 对每次 invoke 单独跑。
     """
     spec = _EXPERTS[name]
     return create_agent(
@@ -75,14 +91,7 @@ def _build_expert(name: str, model_name: str = "deepseek-v4-flash"):
 
 @tool
 def delegate_to_expert(expert: str, task: str) -> str:
-    """把一个子任务委派给某位专家子智能体,返回其结论。
-
-    什么时候用:当问题需要某项专长/某类工具时,把该部分交给对应专家。
-    可选专家:文献检索专家。
-    参数:
-        expert: 专家名称(必须是上面列出的之一)
-        task:   交给该专家的、【自包含】的子任务描述(专家看不到主对话上下文)
-    """
+    """把一个子任务委派给某位专家子智能体,返回其结论。"""
     if expert not in _EXPERTS:
         # 名字不对时,给模型一个能自我纠正的提示,而不是抛异常崩掉
         return f"没有名为「{expert}」的专家。可选:{list(_EXPERTS)}"
@@ -94,3 +103,17 @@ def delegate_to_expert(expert: str, task: str) -> str:
     #   return result["messages"][-1].content
     result = agent.invoke({"messages": [{"role": "user", "content": task}]})
     return result["messages"][-1].content
+
+
+# 工具描述【从注册表生成】,不手写。
+#
+# 为什么必须这样:工具描述就是主 agent 的路由依据 —— 派不派活、派给谁,
+# 全凭这段文字。手写清单一定会和注册表跑偏:实测就发生过,注册表里有两位专家,
+# docstring 却只写了"可选专家:文献检索专家",主 agent 压根不知道还有配方专家。
+# deepagents 的 task 工具同样是 TASK_TOOL_DESCRIPTION.format(available_agents=...)。
+delegate_to_expert.description = (
+    "把一个子任务委派给某位专家子智能体,返回其结论。\n"
+    "什么时候用:当问题需要下列某项专长时,把该部分作为【自包含】的任务描述交给对应专家"
+    "(专家看不到主对话上下文,task 里要带全必要信息)。\n"
+    "可选专家:\n" + "\n".join(f"- {n}:{s['description']}" for n, s in _EXPERTS.items())
+)
