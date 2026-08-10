@@ -19,6 +19,7 @@ import uuid
 from ruixue_agent.eval.schema import EvalCase
 from ruixue_agent.eval.scoring import CaseScore, score_case
 from ruixue_agent.eval.trace import Timer, Trace, extract
+from ruixue_agent.subagents import collect_subagent_runs
 
 logger = logging.getLogger("ruixue.eval")
 
@@ -61,9 +62,11 @@ def run_case(
         "recursion_limit": recursion_limit,
     }
     try:
-        with Timer() as t:
+        # 收集本次运行的子 agent 委派 —— 否则它们烧的 token 和调的工具全是黑箱
+        with collect_subagent_runs() as subs, Timer() as t:
             state = agent.invoke({"messages": [{"role": "user", "content": case.question}]}, cfg)
         tr = extract(case.id, state, t.ms)
+        tr.subagent_runs = list(subs)
     except Exception as e:
         # 记类型和消息就够;完整堆栈进日志。评测报告里塞堆栈会淹没真正的信号。
         logger.exception("用例 %s 运行失败", case.id)

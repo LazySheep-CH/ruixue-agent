@@ -42,6 +42,13 @@ class Trace:
     # 前者是系统问题,后者是能力问题,混在一起会误导优化方向。
     interrupted: bool = False
     error: str = ""
+    # 本次运行里发生的【子 agent 委派】账单。
+    #
+    # 为什么必须单独收:子 agent 的消息不进父状态,所以它烧的 token
+    # 完全不在下面 input_tokens/output_tokens 里 —— 只要发生委派,
+    # 成本统计就是偏低的,而我们还拿它做版本对比。
+    # 见 subagents.collect_subagent_runs。
+    subagent_runs: list = field(default_factory=list)
     # 执行失败的工具名。工具挂了(Milvus 断连等)会被中间件降级成一条提示,
     # agent 于是老实回"该功能暂时不可用"—— 判分若按"缺要点"算,就把
     # 【环境问题】记成了【能力问题】,你会去改提示词,而实际上要修的是 Milvus。
@@ -58,7 +65,19 @@ class Trace:
 
     @property
     def total_tokens(self) -> int:
-        return self.input_tokens + self.output_tokens
+        """总 token = 父 agent + 【所有子 agent】。
+
+        漏掉子 agent 的那部分是真发生过的 bug:成本指标偏低,
+        而版本对比正是拿它比的。
+        """
+        sub = sum(r.input_tokens + r.output_tokens for r in self.subagent_runs)
+        return self.input_tokens + self.output_tokens + sub
+
+    @property
+    def all_tool_names(self) -> list[str]:
+        """父 agent + 子 agent 内部调过的所有工具。排查"到底干了什么"时看这个。"""
+        inner = [t for r in self.subagent_runs for t in r.tools]
+        return self.tool_names + inner
 
     def to_dict(self) -> dict:
         return asdict(self)
