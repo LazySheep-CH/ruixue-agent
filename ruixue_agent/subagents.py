@@ -12,6 +12,12 @@
   从根上杜绝"无限递归派活"。
 """
 
+import logging
+import time
+import uuid
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass
 from functools import cache
 
 from langchain.agents import create_agent
@@ -22,6 +28,8 @@ from ruixue_agent.tools.calc import estimate_film_usage
 from ruixue_agent.tools.environment import get_climate_info, get_soil_info
 from ruixue_agent.tools.optimize import screen_film_recipes
 from ruixue_agent.tools.rag import search_knowledge
+
+logger = logging.getLogger("ruixue.subagent")
 
 # ── 专家注册表:专家名 -> {描述, 工具集, 系统提示}。加专家 = 加一条 ──────────
 # 注意:这里【不放】delegate 工具进任何专家 —— 专家不能再派活(防递归)。
@@ -89,6 +97,84 @@ def _build_expert(name: str, model_name: str = "deepseek-v4-flash"):
     )
 
 
+# ── 子 agent 的可观测性 ────────────────────────────────────────
+#
+# ## 不做这件事会怎样(实测发现的真缺陷)
+#
+# delegate_to_expert 原本只返回一个字符串,子 agent 的消息【从不进入父状态】。
+# 后果比"少个 id"严重得多:
+#
+#   · 成本漏算 —— 我们的 Trace 是从【父 agent 的消息】累加 token 的,
+#     子 agent 烧掉的 token 一分钱都没统计进去。评测报的 "5595 tokens/题"
+#     只要发生委派就是【偏低的】,而我们还拿它做版本成本对比。
+#   · 内部全黑箱 —— 评测只看见一次 delegate_to_expert,专家在里面调了几次
+#     什么工具、转了几圈、慢在哪,全都看不到。排查时无从下手。
+#
+# deepagents 的 task 工具用三招解决:打追踪标记、挂进父 trace、
+# 用 Command 把子 agent 的消息写回父状态。
+#
+# ## 我们的做法:ContextVar 收集器
+#
+# 不引入 Command(那要改父状态 schema、牵动整条装配链),而是用一个
+# 【运行域的收集器】:调用方在跑 agent 前放一个空列表进 ContextVar,
+# 子 agent 跑完把自己的账单 append 进去,跑完调用方取走。
+#
+# 为什么可行(已实测):工具跑在线程池里,但 ContextVar 会随上下文复制传进去;
+# 而列表是【按引用共享】的 —— 复制的是变量映射,不是列表本身,
+# 所以工具线程里的 append 主线程看得见。
+# 并行委派也安全:CPython 里 list.append 是原子的。
+_collector: ContextVar[list | None] = ContextVar("subagent_runs", default=None)
+
+
+@dataclass
+class SubAgentRun:
+    """一次委派的账单。给可观测性用,不参与业务逻辑。"""
+
+    sub_run_id: str
+    expert: str
+    task: str  # 截断存,只为排查时能认出是哪一次
+    tools: list[str]  # 专家【内部】调了哪些工具 —— 原本完全不可见
+    input_tokens: int
+    output_tokens: int
+    latency_ms: int
+    ok: bool
+    error: str = ""
+
+
+@contextmanager
+def collect_subagent_runs():
+    """把本次运行期间发生的所有委派收集起来。
+
+    用法:
+        with collect_subagent_runs() as runs:
+            agent.invoke(...)
+        # runs 里就是这次运行的全部委派账单
+    """
+    box: list[SubAgentRun] = []
+    token = _collector.set(box)
+    try:
+        yield box
+    finally:
+        _collector.reset(token)
+
+
+def _record(run: SubAgentRun) -> None:
+    """记账:进日志(生产可查)+ 进收集器(评测可算)。"""
+    logger.info(
+        "子agent委派 %s expert=%s tools=%s tokens=%d+%d %dms ok=%s",
+        run.sub_run_id,
+        run.expert,
+        ",".join(run.tools) or "-",
+        run.input_tokens,
+        run.output_tokens,
+        run.latency_ms,
+        run.ok,
+    )
+    box = _collector.get()
+    if box is not None:
+        box.append(run)
+
+
 @tool
 def delegate_to_expert(expert: str, task: str) -> str:
     """把一个子任务委派给某位专家子智能体,返回其结论。"""
@@ -96,13 +182,49 @@ def delegate_to_expert(expert: str, task: str) -> str:
         # 名字不对时,给模型一个能自我纠正的提示,而不是抛异常崩掉
         return f"没有名为「{expert}」的专家。可选:{list(_EXPERTS)}"
 
+    sub_run_id = f"sa-{uuid.uuid4().hex[:8]}"
+    t0 = time.perf_counter()
     agent = _build_expert(expert)
-    # ===== (你写)=====
-    # 让专家子 agent 独立跑一遍这个子任务,把它的【最终答案】(最后一条消息的内容)返回:
-    #   result = agent.invoke({"messages": [{"role": "user", "content": task}]})
-    #   return result["messages"][-1].content
-    result = agent.invoke({"messages": [{"role": "user", "content": task}]})
-    return result["messages"][-1].content
+    try:
+        result = agent.invoke({"messages": [{"role": "user", "content": task}]})
+    except Exception as e:
+        _record(
+            SubAgentRun(
+                sub_run_id,
+                expert,
+                task[:120],
+                [],
+                0,
+                0,
+                int((time.perf_counter() - t0) * 1000),
+                False,
+                f"{type(e).__name__}",
+            )
+        )
+        raise
+
+    msgs = result.get("messages", [])
+    # 把专家内部的账单扒出来 —— 这些信息原本随 result 一起被丢掉了
+    tools, tin, tout = [], 0, 0
+    for m in msgs:
+        for tc in getattr(m, "tool_calls", None) or []:
+            tools.append(tc.get("name", "?"))
+        usage = getattr(m, "usage_metadata", None) or {}
+        tin += usage.get("input_tokens", 0)
+        tout += usage.get("output_tokens", 0)
+    _record(
+        SubAgentRun(
+            sub_run_id,
+            expert,
+            task[:120],
+            tools,
+            tin,
+            tout,
+            int((time.perf_counter() - t0) * 1000),
+            True,
+        )
+    )
+    return msgs[-1].content if msgs else ""
 
 
 # 工具描述【从注册表生成】,不手写。
