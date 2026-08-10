@@ -92,6 +92,14 @@ RUN for m in DR WVTR TS; do \
       { echo "❌ 缺少预测模型产物 models/predictors/$m/。先训练:uv run python scripts/train/train.py $m"; exit 1; }; \
     done
 
+# ⑤.5 构建期断言:运行时必需的离线数据必须在镜像里。
+#
+#    和上面模型产物同理,但这个更值得一道断言:models/ 缺了会在【构建期】炸
+#    (有 ⑤ 拦着),而这些 csv 缺了是【运行期】炸 —— 工具抛 FileNotFoundError,
+#    agent 把它当"工具暂时不可用"如实转述给用户。服务看着是活的,功能是废的。
+#    实测就这么漏到过线上。
+RUN for f in county_soil.csv county_latlon.csv; do       test -f "data/predictors/$f" ||       { echo "❌ 缺运行时数据 data/predictors/$f(土壤/地点预测要读它)"; exit 1; };     done
+
 # ⑥ 构建期断言:配置文件必须在,且里面不许出现明文密钥。
 #
 #    config/config.yaml 是【要进镜像】的 —— 它写的是 api_key: $DEEPSEEK_API_KEY
