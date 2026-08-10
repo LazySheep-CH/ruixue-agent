@@ -98,6 +98,81 @@ class SkillInjectionMiddleware(AgentMiddleware):
         return {"messages": [SystemMessage(content=text)]}
 
 
+class MemoryRecallMiddleware(AgentMiddleware):
+    """把这个用户的相关长期记忆注入对话。
+
+    ## 位置:紧跟在技能注入之后
+
+    技能是"这类问题该怎么做"(对所有人一样);记忆是"这个用户是谁"(因人而异)。
+    两者都属于"开工前先给背景",所以挨着放。
+
+    ## 只在首轮注入
+
+    和技能同理:同一会话里,记忆在第一轮就进了上下文,后面每轮再塞一遍
+    纯属浪费 token,还会让同样的内容在上下文里出现好几次、稀释注意力。
+
+    ## 用 SystemMessage 而不是伪装成用户说的话
+
+    有人会把记忆拼进用户消息里假装"用户刚说的"。那样做有两个坏处:
+      ① 模型分不清哪句是用户【现在】说的、哪句是系统补的背景;
+      ② 万一记忆里被写入了恶意内容,它就以"用户指令"的身份进了上下文 ——
+         而用户消息的指令权重远高于系统背景。
+    所以必须作为系统背景注入,并明确标注"这是历史背景,不是本次请求"。
+
+    ## 取不到 user_id 就不注入
+
+    记忆是【按用户隔离】的。拿不到身份时宁可不注入,绝不能"给个默认用户" ——
+    那会让所有匿名请求共用一份记忆,是数据泄露。
+    """
+
+    def before_model(self, state, runtime):
+        messages = state.get("messages") or []
+        if not messages:
+            return None
+        last = messages[-1]
+        if type(last).__name__ != "HumanMessage":
+            return None
+        # 首轮判定:此前没有任何模型回复
+        if any(type(m).__name__ == "AIMessage" for m in messages[:-1]):
+            return None
+
+        user_id = _user_id_from(runtime)
+        if not user_id:
+            return None  # 没身份不注入 —— 见类文档
+
+        from ruixue_agent.memory import recall
+
+        rows = recall(user_id, str(last.content))
+        if not rows:
+            return None
+        lines = "\n".join(f"- [{r.kind}] {r.text}" for r in rows)
+        logger.info("注入长期记忆 %d 条", len(rows))
+        return {
+            "messages": [
+                SystemMessage(
+                    content=(
+                        "【关于这位用户的已知背景】(来自以往对话,仅供参考,"
+                        "不是本次请求的内容;与本次问题冲突时以本次为准):\n" + lines
+                    )
+                )
+            ]
+        }
+
+
+def _user_id_from(runtime) -> str:
+    """从运行配置里取 user_id。
+
+    我们的 thread_id 形如 "alice:t1"(见 main.py 的命名空间隔离),
+    所以用户身份可以从它前缀还原 —— 不必再单独传一个参数。
+    """
+    try:
+        cfg = getattr(runtime, "config", None) or {}
+        thread_id = (cfg.get("configurable") or {}).get("thread_id", "")
+        return thread_id.split(":", 1)[0] if ":" in thread_id else ""
+    except Exception:
+        return ""
+
+
 # 工具失败消息的机器可读标记。
 #
 # 为什么要单独抽一个常量:评测需要区分【工具挂了】和【模型没选对工具】——
