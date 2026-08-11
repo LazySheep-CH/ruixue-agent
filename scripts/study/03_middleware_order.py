@@ -31,7 +31,7 @@ from langchain_core.language_models.fake_chat_models import FakeMessagesListChat
 from langchain_core.messages import AIMessage
 from langchain_core.tools import tool
 
-from ruixue_agent.agents.middlewares import ToolErrorHandlingMiddleware, TimingLoggingMiddleware
+from ruixue_agent.agents.middlewares import TimingLoggingMiddleware, ToolErrorHandlingMiddleware
 
 
 @tool
@@ -49,7 +49,11 @@ class Fake(FakeMessagesListChatModel):
 def run(label: str, middleware: list):
     print(f"\n{label}")
     msgs = [
-        AIMessage(content="", id="a1", tool_calls=[{"name": "flaky_search", "args": {"q": "x"}, "id": "c1"}]),
+        AIMessage(
+            content="",
+            id="a1",
+            tool_calls=[{"name": "flaky_search", "args": {"q": "x"}, "id": "c1"}],
+        ),
         AIMessage(content="收尾", id="a2"),
     ]
     agent = create_agent(Fake(responses=msgs), [flaky_search], middleware=middleware)
