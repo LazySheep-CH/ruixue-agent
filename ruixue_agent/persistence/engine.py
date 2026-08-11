@@ -32,11 +32,17 @@ def database_url() -> str:
     user = os.environ["POSTGRES_USER"]
     password = os.environ["POSTGRES_PASSWORD"]
     db = os.environ["POSTGRES_DB"]
-    # 主机名必须可配:本机开发连 localhost,但【容器里的 localhost 是容器自己】,
-    # 得连服务名 postgres。写死 localhost 的话 app 一进容器就连不上数据库。
-    host = os.getenv("POSTGRES_HOST", "localhost")
+    # 主机名必须可配:本机开发连回环,但【容器里的 localhost 是容器自己】,
+    # 得连服务名 postgres。写死的话 app 一进容器就连不上数据库。
+    #
+    # ⚠ 默认值用 127.0.0.1 而不是 localhost —— 实测差 200 倍(0.05s vs 10.13s):
+    #   compose 里端口只绑了 IPv4 回环(安全加固),而 Windows 把 localhost 先解析成
+    #   IPv6 的 ::1,每次建连都要先等 10 秒超时才退回 IPv4。连接池启动要开 4 条,
+    #   4×10s 直接把 PoolTimeout(30s)打爆 —— 表现为"本机突然连不上库"。
+    #   和 nginx 健康检查用 localhost 失败是同一个病:localhost ≠ 127.0.0.1。
+    host = os.getenv("POSTGRES_HOST", "127.0.0.1")
     # 同理端口:容器间走内网 5432,不受宿主机端口映射影响。
-    port = os.getenv("POSTGRES_PORT", "5432") if host == "localhost" else "5432"
+    port = os.getenv("POSTGRES_PORT", "5432") if host in ("localhost", "127.0.0.1") else "5432"
     # postgresql+psycopg = psycopg3 驱动(不是老的 psycopg2)
     return f"postgresql+psycopg://{user}:{password}@{host}:{port}/{db}"
 
