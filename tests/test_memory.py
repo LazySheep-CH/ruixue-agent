@@ -127,3 +127,87 @@ def test_cannot_delete_others_memory():
     remember("owner-u", [("plot", "owner 的地块信息")])
     mid = _memory_id("owner-u", "owner 的地块信息")
     assert delete_memory("attacker-u", mid) is False, "不能删别人的记忆"
+
+
+# ── 注入时机与身份隔离(中间件层)──────────────────────────────
+#
+# 这几条不碰数据库,只测 MemoryRecallMiddleware 的判断逻辑。
+
+
+class _Rt:
+    """最小 runtime:只带 before_model 真正会读的 config.configurable.thread_id。"""
+
+    def __init__(self, thread_id):
+        self.config = {"configurable": {"thread_id": thread_id}}
+
+
+def _recall_mw(messages, thread_id, fake_rows):
+    """跑一次中间件,返回它想追加的文本(没注入则 None)。recall 用假的,不连库。"""
+    import ruixue_agent.memory as mem
+    from ruixue_agent.agents.middlewares import MemoryRecallMiddleware
+
+    orig = mem.recall
+    mem.recall = lambda uid, q: fake_rows
+    try:
+        out = MemoryRecallMiddleware().before_model({"messages": messages}, _Rt(thread_id))
+    finally:
+        mem.recall = orig
+    return out["messages"][0].content if out else None
+
+
+class _Row:
+    def __init__(self, kind, text):
+        self.kind, self.text = kind, text
+
+
+_ROWS = [_Row("偏好", "在新疆尉犁有 200 亩棉花地")]
+
+
+def test_memory_injected_after_greeting_not_only_first_turn():
+    """记忆最该发挥作用的时刻(用户说"上次那块地"),几乎不可能是第一句话。
+
+    2026-08-08:原判据是"只在首轮",寒暄开场后就永远等不到注入了 ——
+    和技能注入是同一个 bug。
+    """
+    from langchain_core.messages import AIMessage, HumanMessage
+
+    text = _recall_mw(
+        [
+            HumanMessage("你好"),
+            AIMessage("你好,我是瑞雪助手"),
+            HumanMessage("还是上次那块地,再帮我看看"),
+        ],
+        "alice:t1",
+        _ROWS,
+    )
+    assert text and "尉犁" in text
+
+
+def test_memory_not_injected_twice_in_one_session():
+    """已经在上下文里了就不重复塞 —— 省 token 的本意在这里。"""
+    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+
+    first = _recall_mw([HumanMessage("上次那块地")], "alice:t1", _ROWS)
+    again = _recall_mw(
+        [
+            HumanMessage("上次那块地"),
+            SystemMessage(first),
+            AIMessage("好的"),
+            HumanMessage("那配方呢"),
+        ],
+        "alice:t1",
+        _ROWS,
+    )
+    assert again is None
+
+
+def test_no_user_id_means_no_memory_at_all():
+    """拿不到身份时【一条都不给】。
+
+    若图省事写成 user_id or "default",所有匿名请求就共用一份记忆 ——
+    张三上午说的话,李四下午就看见了。宁可不给,不可给错人。
+    """
+    from langchain_core.messages import HumanMessage
+
+    # thread_id 里没有 "用户:" 前缀 → _user_id_from 取不到身份
+    assert _recall_mw([HumanMessage("上次那块地")], "no-user-prefix", _ROWS) is None
