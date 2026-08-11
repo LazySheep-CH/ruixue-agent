@@ -118,6 +118,11 @@ class SkillInjectionMiddleware(AgentMiddleware):
         return {"messages": [SystemMessage(content=render(fresh))]}
 
 
+# 记忆注入的标题。和技能的 SKILL_HEADER 同理:它是【约定好的标记】,
+# 中间件靠它判断"本会话注入过没有"。改了这行就等于把去重判据改了。
+MEMORY_HEADER = "【关于这位用户的已知背景】"
+
+
 class MemoryRecallMiddleware(AgentMiddleware):
     """把这个用户的相关长期记忆注入对话。
 
@@ -126,10 +131,21 @@ class MemoryRecallMiddleware(AgentMiddleware):
     技能是"这类问题该怎么做"(对所有人一样);记忆是"这个用户是谁"(因人而异)。
     两者都属于"开工前先给背景",所以挨着放。
 
-    ## 只在首轮注入
+    ## 只注入一次,但【不限定在首轮】
 
-    和技能同理:同一会话里,记忆在第一轮就进了上下文,后面每轮再塞一遍
-    纯属浪费 token,还会让同样的内容在上下文里出现好几次、稀释注意力。
+    同一会话里记忆进过一次上下文就够了,每轮再塞一遍纯属浪费 token,
+    还会让同样的内容出现好几次、稀释注意力。但"只注入一次"不等于"只在首轮":
+
+        用户:你好                        ← 首轮,recall("你好") 召不回什么 → 不注入
+        助手:你好……
+        用户:还是上次那块地,再帮我看看     ← 【最需要记忆的一句】
+                                          ← 若限定首轮,就永远等不到注入了
+
+    记忆最该发挥作用的时刻,恰恰是用户说"上次""还是那个"的时候 ——
+    而那几乎不可能是第一句话。所以判据是"注入过没有",不是"第几轮"。
+    (技能注入踩过同一个坑,见 SkillInjectionMiddleware 的说明。)
+
+    相关性由 recall() 自己按当前问题判断,召不回就不注入 —— 不需要靠"首轮"来兜。
 
     ## 用 SystemMessage 而不是伪装成用户说的话
 
@@ -152,8 +168,8 @@ class MemoryRecallMiddleware(AgentMiddleware):
         last = messages[-1]
         if type(last).__name__ != "HumanMessage":
             return None
-        # 首轮判定:此前没有任何模型回复
-        if any(type(m).__name__ == "AIMessage" for m in messages[:-1]):
+        # 本会话是否已经注入过记忆?靠扫历史里的标题判断,不额外存状态。
+        if any(MEMORY_HEADER in str(getattr(m, "content", "")) for m in messages[:-1]):
             return None
 
         user_id = _user_id_from(runtime)
@@ -170,8 +186,10 @@ class MemoryRecallMiddleware(AgentMiddleware):
         return {
             "messages": [
                 SystemMessage(
+                    # 用同一个 MEMORY_HEADER 常量拼,不硬编码 —— 第 172 行的去重
+                    # 判据认的就是它。两处各写一份字面量,改一处忘一处就静默失效。
                     content=(
-                        "【关于这位用户的已知背景】(来自以往对话,仅供参考,"
+                        f"{MEMORY_HEADER}(来自以往对话,仅供参考,"
                         "不是本次请求的内容;与本次问题冲突时以本次为准):\n" + lines
                     )
                 )
