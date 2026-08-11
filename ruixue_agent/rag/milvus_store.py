@@ -22,7 +22,8 @@ from ruixue_agent.rag.embedding import embed
 
 _DIM = 512  # BAAI/bge-small-zh-v1.5 输出维度
 # 同 PostgreSQL:容器里的 localhost 是容器自己,得连服务名(http://milvus:19530)。
-_URI = os.getenv("MILVUS_URI", "http://localhost:19530")
+# 127.0.0.1 而非 localhost:理由见 persistence/engine.py(Windows 的 ::1 先行陷阱)
+_URI = os.getenv("MILVUS_URI", "http://127.0.0.1:19530")
 _BATCH = 2000  # 单次 upsert 批大小
 
 # Milvus 是最终一致:upsert 返回不代表数据可见(默认 Bounded 有秒级延迟窗口,
