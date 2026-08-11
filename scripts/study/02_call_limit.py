@@ -31,7 +31,9 @@ def do_nothing() -> str:
 # 假模型:不管收到什么,永远回"我还要再调一次 do_nothing"——永不给最终答案。
 # 这就是"死循环"的最坏情况。每条 AIMessage 要有不同 id,否则框架会报错。
 _loop = [
-    AIMessage(content="", id=f"turn-{i}", tool_calls=[{"name": "do_nothing", "args": {}, "id": f"c{i}"}])
+    AIMessage(
+        content="", id=f"turn-{i}", tool_calls=[{"name": "do_nothing", "args": {}, "id": f"c{i}"}]
+    )
     for i in range(50)
 ]
 

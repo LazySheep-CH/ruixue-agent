@@ -14,7 +14,7 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import SystemMessage, ToolMessage
 
 from ruixue_agent.guardrails.injection import REINFORCE_NOTICE, detect_injection
-from ruixue_agent.skills import render_skills
+from ruixue_agent.skills import injected_names, render, select_skills
 
 logger = logging.getLogger("ruixue.agent")
 
@@ -78,7 +78,20 @@ class SkillInjectionMiddleware(AgentMiddleware):
     如何权衡、有哪些坑)写死在系统提示会越堆越长、稀释注意力;写进代码更糟,
     因为它要由领域专家反复迭代。故做成 skills/*.md,按关键词命中才注入。
 
-    只在【首轮】注入:同一会话里规程不必反复重申,省 token。
+    ## 每条规程只注入一次,但【不限定在首轮】
+
+    早先的写法是"只在首轮注入",看起来省 token,实际有个致命漏洞:
+
+        用户:你好              ← 首轮,但没命中关键词 → 不注入
+        助手:你好,我是……
+        用户:帮我选个配方       ← 命中了,却已经不是首轮 → 【永远不会注入】
+
+    只要开场寒暄一句,整个技能系统就失效了 —— 而寒暄开场恰恰是最常见的用法。
+    "省 token"的本意是"同一份别重复塞",不是"错过就再也不给"。
+
+    所以判据换成:**这条规程在本会话里注入过吗?** 没有就注入,不管第几轮。
+    判断方式是扫历史里的 `【作业规程:名称】` 标题(见 skills/loader.py)——
+    不额外存状态,消息列表本身就是唯一事实来源。
     """
 
     def before_model(self, state, runtime):
@@ -88,14 +101,21 @@ class SkillInjectionMiddleware(AgentMiddleware):
         last = messages[-1]
         if type(last).__name__ != "HumanMessage":
             return None
-        # 首轮判定:此前没有任何模型回复 → 这是本会话第一个问题
-        if any(type(m).__name__ == "AIMessage" for m in messages[:-1]):
-            return None
-        text = render_skills(str(last.content))
-        if not text:
-            return None
-        logger.info("注入作业规程(技能)")
-        return {"messages": [SystemMessage(content=text)]}
+
+        hit = select_skills(str(last.content))
+        if not hit:
+            return None  # 这次提问没命中任何规程
+
+        # 扫历史,看哪些规程已经在上下文里了
+        already: set[str] = set()
+        for m in messages[:-1]:
+            already |= injected_names(str(getattr(m, "content", "")))
+        fresh = [s for s in hit if s.name not in already]
+        if not fresh:
+            return None  # 命中的这几条都已经注入过,不重复塞
+
+        logger.info("注入作业规程(技能): %s", [s.name for s in fresh])
+        return {"messages": [SystemMessage(content=render(fresh))]}
 
 
 class MemoryRecallMiddleware(AgentMiddleware):

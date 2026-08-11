@@ -69,10 +69,29 @@ def select_skills(user_text: str, limit: int = 2) -> list[Skill]:
     return [s for s in load_skills() if s.matches(user_text)][:limit]
 
 
-def render_skills(user_text: str, limit: int = 2) -> str:
-    """把匹配到的技能渲染成可注入上下文的文本;没匹配到返回空串。"""
-    hit = select_skills(user_text, limit)
-    if not hit:
+# 每条技能在上下文里的标题格式。中间件靠它判断"这条之前注入过没有",
+# 所以它是【约定好的标记】,不能随手改 —— 改了要同步改 SKILL_HEADER_RE。
+SKILL_HEADER = "【作业规程:{name}】"
+SKILL_HEADER_RE = re.compile(r"【作业规程:(.+?)】")
+
+
+def render(skills: list[Skill]) -> str:
+    """把【给定的】技能渲染成可注入上下文的文本;空列表返回空串。
+
+    和 render_skills 的区别:这个函数不负责挑选,由调用方决定注入哪几条 ——
+    中间件需要"挑出匹配的,再剔掉已经注入过的",所以挑选和渲染必须能分开。
+    """
+    if not skills:
         return ""
-    parts = [f"【作业规程:{s.name}】\n{s.body}" for s in hit]
+    parts = [f"{SKILL_HEADER.format(name=s.name)}\n{s.body}" for s in skills]
     return "以下是本领域已验证的作业规程,请按其步骤与注意事项作答:\n\n" + "\n\n".join(parts)
+
+
+def injected_names(text: str) -> set[str]:
+    """从一段已注入的文本里,反查出它包含了哪几条技能(按标题解析)。"""
+    return set(SKILL_HEADER_RE.findall(text))
+
+
+def render_skills(user_text: str, limit: int = 2) -> str:
+    """按用户输入匹配并渲染;没匹配到返回空串。(便捷入口,不做去重)"""
+    return render(select_skills(user_text, limit))
