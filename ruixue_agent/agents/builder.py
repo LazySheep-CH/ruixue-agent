@@ -91,11 +91,13 @@ def _build_middleware(summary_model_name: str, require_approval: bool) -> list:
         #    且要在最靠近用户输入的位置,后续中间件都在其保护之下。
         PromptInjectionGuardMiddleware(),
         # ⓪.5 作业规程注入:按提问场景注入已验证的 SOP(skills/*.md),
-        #     告诉模型"这类问题该怎么做"。只在首轮注入,省 token。
+        #     告诉模型"这类问题该怎么做"。每条规程【一个会话只注入一次】,
+        #     但不限定首轮 —— 限定首轮的话,"你好"开场就会让它永远等不到注入。
         SkillInjectionMiddleware(),
         # ⓪.6 长期记忆注入:技能是"这类问题该怎么做"(对所有人一样),
         #     记忆是"这个用户是谁"(因人而异)。两者都属于"开工前先给背景",
-        #     所以挨着放。同样只在首轮注入。
+        #     所以挨着放。去重判据同样是"注入过没有",不是"第几轮"——
+        #     记忆最该发挥作用的"还是上次那块地",几乎不会是第一句话。
         MemoryRecallMiddleware(),
         # ① 死循环刹车:已经到上限就该立刻停,不能先花钱做摘要、再发现"哦该停了"。
         ModelCallLimitMiddleware(
