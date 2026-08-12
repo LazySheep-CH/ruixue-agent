@@ -86,10 +86,30 @@ def extract_facts(question: str, answer: str) -> list[tuple[str, str]]:
 
 
 def _strip_fence(s: str) -> str:
-    """模型爱把 JSON 包在 ```json 里。不剥掉就解析失败 —— 而失败是静默的
-    (被上面的 except 吞掉),表现为"记忆功能好像没生效",极难查。"""
+    """把模型回复里的 JSON 抠出来。
+
+    模型爱把 JSON 包在 ```json 里,不剥掉就解析失败 —— 而失败是静默的
+    (被上面的 except 吞掉),表现为"记忆功能好像没生效",极难查。
+
+    ⚠ 旧写法是 `if s.startswith("```")`,只认【整段以代码块开头】的情况。
+      模型很常见地先客气一句再给代码块:
+
+          好的,抽取结果如下:
+          ```json
+          {"facts": []}
+          ```
+
+      这时判断不成立,整段原样送进 json.loads → 报错 → 被吞 → 这轮记忆丢失。
+      实测四种真实形态里恰好漏掉这一种。
+
+    改成【定位第一个 { 到最后一个 }】:不管前后有没有客套话、有没有代码块标记,
+    都能把 JSON 本体抠出来。宽进严出 —— 抠错了 json.loads 自然会报错,
+    但至少不会因为模型多说了一句话就整个失效。
+    """
     s = s.strip()
+    # 先剥代码块围栏(有就剥,没有不影响)
     if s.startswith("```"):
-        s = s.split("\n", 1)[-1]
-        s = s.rsplit("```", 1)[0]
-    return s.strip()
+        s = s.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+    # 再从任意位置定位 JSON 对象本体
+    start, end = s.find("{"), s.rfind("}")
+    return s[start : end + 1] if 0 <= start < end else s

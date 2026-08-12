@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 
 import pytest
@@ -37,6 +38,28 @@ def test_strip_fence_handles_json_code_block():
     (被 except 吞掉),表现为"记忆功能好像没生效",极难查。"""
     assert _strip_fence('```json\n{"facts": []}\n```') == '{"facts": []}'
     assert _strip_fence('{"facts": []}') == '{"facts": []}'
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        '{"facts": []}',  # 纯 JSON
+        '```json\n{"facts": []}\n```',  # 带语言标记的代码块
+        '```\n{"facts": []}\n```',  # 不带语言标记
+        '好的,抽取结果如下:\n```json\n{"facts": []}\n```',  # 前面有客套话 ← 旧写法在这挂
+        '```json\n{"facts": []}\n```\n以上就是抽取结果。',  # 后面有解释
+        '结果:\n```json\n{"facts": []}\n```\n如需调整请告知。',  # 前后都有
+        '抽取结果:{"facts": []}',  # 裸 JSON 但有前缀
+    ],
+)
+def test_strip_fence_survives_model_pleasantries(raw):
+    """旧写法是 `if s.startswith("```")`,只认【整段以代码块开头】。
+
+    模型很常见地先客气一句再给代码块,这时判断不成立 → 整段送进 json.loads
+    → 报错 → 被 except 吞掉 → 这轮记忆静默丢失。2026-08-08 实测七种形态里
+    恰好漏掉"前面有客套话"这一种。
+    """
+    assert json.loads(_strip_fence(raw)) == {"facts": []}
 
 
 def test_extract_returns_empty_on_model_failure(monkeypatch):
