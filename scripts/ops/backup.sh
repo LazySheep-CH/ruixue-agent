@@ -15,7 +15,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-BACKUP_DIR="${BACKUP_DIR:-$ROOT/backups}"
+BACKUP_DIR="${BACKUP_DIR:-$ROOT/backend/backups}"
 KEEP_DAYS="${KEEP_DAYS:-14}"          # 保留天数,超过的自动清理
 CONTAINER="${PG_CONTAINER:-rxmvp-postgres}"
 

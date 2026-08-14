@@ -11,28 +11,8 @@ __pycache__/
 # 密钥:绝不提交!只提交 .env.example 模板
 .env
 
-# ── 数据不进 git ──
-# git 是给【代码】用的:它假设文件小、改动是行级的、历史要永久保留。
-# 4.2G 的解析产物全都不满足 —— 而且 git 历史【删不掉】,提交一次就永远背着。
-# 判断标准就一句:能不能用代码重新生成?
-#   能 → 是产物,不进 git(data/ 大部分能:MinerU 输出重跑管道就有)
-#   不能 → 是资产,得有别的地方存(原始 PDF → 以后进 MinIO)
-#
-# 两个例外,都是【手工做的、重跑管道得不到的复现根基】:
-#   data/predictors/  预测模型训练输入
-#   data/eval/        评测集 = 尺子。不在库里,README 里的 R@1 0.807 和
-#                     Agent 32/33 就没人能复现,基线也无从对比 —— 这是
-#                     和"产物"完全不同的东西:它是人一道一道标注出来的。
-#                     ~700KB,完全在 git 舒适区内。
-# 注意:必须用 data/* 而非 data/ —— 整目录被忽略时,子目录例外不生效。
-data/*
-!data/predictors/
-!data/eval/
-mineru-out/
 
 # 模型权重(几个 G,由 sentence-transformers 自己缓存)
-models/
-config/config.yaml
 
 # 视频/截图分析工具的临时产物,不进仓库
 .codex-video-frames/
@@ -56,8 +36,6 @@ config/config.yaml
 .impeccable/live/*.png
 # impeccable-ignore-end
 
-# 数据库备份(可能含用户数据,且体积大)
-backups/
 
 # 生产密钥与证书:绝不提交
 docker/.env.prod
@@ -67,14 +45,10 @@ docker/nginx/www/
 # 其他工具的工作目录(含 node_modules),不进本仓库
 .codex-work/
 
-# 评测运行结果(每次跑都会生成,不进库)
-runs/
 
 # ── 个人材料:评审/对外材料文档永不入库(2026-08-14,曾被推上公开仓库)──
 docs/private/
 docs/private/
-# 学习演示脚本,不属于产品代码
-scripts/study/
 # 本地产物与外部工具目录,不入库
 outputs/
 .impeccable/

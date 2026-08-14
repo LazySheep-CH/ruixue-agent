@@ -32,9 +32,10 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parent.parent
-README = ROOT / "README.md"
-BASELINE = ROOT / "data" / "eval" / "baselines" / "retrieval_latest.json"
+BACKEND = Path(__file__).resolve().parent.parent
+# README 在【仓库根】(项目门面),基线数据在 backend/data 下 —— 两个锚不同
+README = BACKEND.parent / "README.md"
+BASELINE = BACKEND / "data" / "eval" / "baselines" / "retrieval_latest.json"
 
 # 上线管线在基线 json 里的层名(与 run_eval.py 的 configs 标签一致)
 ONLINE_LAYER = "+BM25+rerank"
@@ -45,7 +46,7 @@ HYBRID = "+BM25(混合)"
 def _load_baseline() -> dict:
     if not BASELINE.exists():
         pytest.skip(
-            f"没有评测基线({BASELINE.relative_to(ROOT)})。"
+            f"没有评测基线({BASELINE.relative_to(BACKEND)})。"
             "跑 `uv run python scripts/run_eval.py --ab` 生成后本测试才生效。"
         )
     return json.loads(BASELINE.read_text(encoding="utf-8"))
@@ -74,7 +75,7 @@ def test_readme_reports_online_pipeline_metrics():
     }
     assert not missing, (
         f"README.md 的检索指标与最近一次评测对不上,缺失:{missing}\n"
-        f"基线文件:{BASELINE.relative_to(ROOT)}\n"
+        f"基线文件:{BASELINE.relative_to(BACKEND)}\n"
         "要么更新 README,要么这次评测跑法不标准——请人工判断,不要直接改这个测试。"
     )
 
@@ -105,7 +106,7 @@ def test_readme_evalset_size_matches_file():
     README 曾长期写"150 题",而 data/eval/evalset.jsonl 早已是 338 行——
     上面那些指标之所以全错,根源就是这个。
     """
-    evalset = ROOT / "data" / "eval" / "evalset.jsonl"
+    evalset = BACKEND / "data" / "eval" / "evalset.jsonl"
     if not evalset.exists():
         pytest.skip("评测集未随仓库分发")
 
