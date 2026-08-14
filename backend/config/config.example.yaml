@@ -1,0 +1,25 @@
+models:
+  - name: deepseek-v4-flash
+    model: deepseek-v4-flash
+    base_url: https://api.deepseek.com/v1
+    api_key: $DEEPSEEK_API_KEY
+    class: langchain_deepseek:ChatDeepSeek
+  - name: deepseek-v4-pro
+    model: deepseek-v4-pro
+    base_url: https://api.deepseek.com/v1
+    api_key: $DEEPSEEK_API_KEY
+    class: langchain_deepseek:ChatDeepSeek
+# ── MCP:接入外部工具(可选)────────────────────────────────────
+# MCP 是让 agent 使用【外部工具】的开放协议:工具不必写进本仓库,
+# 第三方或你自己的其他服务按协议暴露能力,这里配一下就能用 ——
+# "加工具"从改代码变成改配置。
+# 不写这一段 = 不启用(零开销);配了但连不上 = 只记日志、少几个工具,主流程照常。
+# mcp:
+#   servers:
+#     filesystem:                    # 本地进程型
+#       transport: stdio
+#       command: npx
+#       args: ["-y", "@modelcontextprotocol/server-filesystem", "/data"]
+#     weather:                       # 远程 HTTP 型
+#       transport: streamable_http
+#       url: https://example.com/mcp

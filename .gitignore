@@ -11,25 +11,46 @@ __pycache__/
 # 密钥:绝不提交!只提交 .env.example 模板
 .env
 
-# ── 数据不进 git ──
-# git 是给【代码】用的:它假设文件小、改动是行级的、历史要永久保留。
-# 4.2G 的解析产物全都不满足 —— 而且 git 历史【删不掉】,提交一次就永远背着。
-# 判断标准就一句:能不能用代码重新生成?
-#   能 → 是产物,不进 git(data/ 全部能:MinerU 输出重跑管道就有)
-#   不能 → 是资产,得有别的地方存(原始 PDF → 以后进 MinIO)
-# 忽略 data/ 下的内容,但【保留】data/predictors/(预测模型训练输入,小、是复现根基)。
-# 注意:必须用 data/* 而非 data/ —— 整目录被忽略时,子目录例外不生效。
-data/*
-!data/predictors/
-mineru-out/
 
 # 模型权重(几个 G,由 sentence-transformers 自己缓存)
-models/
-config/config.yaml
 
 # 视频/截图分析工具的临时产物,不进仓库
 .codex-video-frames/
 
+# impeccable-ignore-start
+# 本地设计审查产物；共享设计规范保留在 .impeccable/design.json
+.impeccable/config.local.json
+.impeccable/hook.cache.json
+.impeccable/hook.pending.json
+.impeccable/*.png
+.impeccable/live/server.json
+.impeccable/live/sessions/
+.impeccable/live/previews/
+.impeccable/live/annotations/
+.impeccable/live/cache/
+.impeccable/live/manual-edit-apply-transaction.json
+.impeccable/live/manual-edit-events.jsonl
+.impeccable/live/manual-edit-evidence/
+.impeccable/live/pending-manual-edits.json
+.impeccable/live/deferred-svelte-component-accepts.json
+.impeccable/live/*.png
+# impeccable-ignore-end
+
+
+# 生产密钥与证书:绝不提交
+docker/.env.prod
+docker/nginx/certs/
+docker/nginx/www/
+
+# 其他工具的工作目录(含 node_modules),不进本仓库
+.codex-work/
+
+
 # ── 个人材料:评审/对外材料文档永不入库(2026-08-14,曾被推上公开仓库)──
 docs/private/
 docs/private/
+# 本地产物与外部工具目录,不入库
+outputs/
+.impeccable/
+design-system/
+.idea/

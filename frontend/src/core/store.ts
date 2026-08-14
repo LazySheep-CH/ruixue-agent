@@ -7,8 +7,8 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
-import { streamChat } from "./api";
-import type { Message, Thread } from "./types";
+import { getRun, resumeRun, streamChat } from "./api";
+import type { Message, StreamEvent, Thread } from "./types";
 
 interface State {
   threads: Thread[];
@@ -20,8 +20,11 @@ interface State {
   newThread: () => string;
   selectThread: (id: string) => void;
   deleteThread: (id: string) => void;
+  restoreThread: (thread: Thread, threadMessages: Message[]) => void;
   send: (text: string) => Promise<void>;
   stop: () => void;
+  /** 页面加载时调用:若上次有未看完的运行,取回其结果。 */
+  resumeIfPending: () => Promise<void>;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -29,6 +32,67 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 const titleOf = (text: string) => (text.length > 18 ? text.slice(0, 18) + "…" : text);
 
 let controller: AbortController | null = null;
+
+/**
+ * "未完成的运行"登记。
+ *
+ * 为什么需要:后端改成【异步执行】后,客户端断开(刷新页面、切网络、锁屏)
+ * 不会停掉 agent —— 它在服务端跑完并落库。但前端刷新后内存全没了,
+ * 不知道刚才那次跑到哪了。故把 run_id 存进 localStorage,
+ * 重新打开时调 resumeIfPending() 取回结果 —— 用户不用重问、不用重新花钱。
+ */
+type PendingRun = { runId: string; threadId: string; msgId: string };
+const PENDING_KEY = "ruixue.pendingRun";
+const savePendingRun = (p: PendingRun) => {
+  try {
+    localStorage.setItem(PENDING_KEY, JSON.stringify(p));
+  } catch {
+    // 隐私模式下 localStorage 可能不可用 —— 只是失去恢复能力,不该影响对话
+  }
+};
+const clearPendingRun = () => {
+  try {
+    localStorage.removeItem(PENDING_KEY);
+  } catch {
+    /* 同上 */
+  }
+};
+const loadPendingRun = (): PendingRun | null => {
+  try {
+    const raw = localStorage.getItem(PENDING_KEY);
+    return raw ? (JSON.parse(raw) as PendingRun) : null;
+  } catch {
+    return null;
+  }
+};
+
+/** 把后端事件归并到一条助手消息。发送与断线恢复必须共用同一套规则。 */
+const applyEvent = (message: Message, event: StreamEvent): Message => {
+  switch (event.type) {
+    case "thinking":
+      return { ...message, thinking: (message.thinking ?? "") + event.text };
+    case "answer":
+      return { ...message, content: message.content + event.text };
+    case "tool_start": {
+      const tools = message.tools ?? [];
+      if (tools.some((tool) => tool.name === event.name)) return message;
+      return { ...message, tools: [...tools, { name: event.name, done: false }] };
+    }
+    case "tool_end":
+      return {
+        ...message,
+        tools: (message.tools ?? []).map((tool) =>
+          tool.name === event.name ? { ...tool, done: true } : tool,
+        ),
+      };
+    case "run":
+      return { ...message, runId: event.run_id };
+    case "error":
+      return { ...message, error: event.text };
+    case "done":
+      return message;
+  }
+};
 
 export const useStore = create<State>()(
   persist(
@@ -55,6 +119,8 @@ export const useStore = create<State>()(
           const threads = s.threads.filter((t) => t.id !== id);
           const messages = { ...s.messages };
           delete messages[id];
+          const activeRun = loadPendingRun();
+          if (activeRun?.threadId === id) clearPendingRun();
           return {
             threads,
             messages,
@@ -62,10 +128,75 @@ export const useStore = create<State>()(
           };
         }),
 
+      restoreThread: (thread, threadMessages) =>
+        set((state) => ({
+          threads: state.threads.some((item) => item.id === thread.id)
+            ? state.threads
+            : [thread, ...state.threads],
+          messages: { ...state.messages, [thread.id]: threadMessages },
+          currentThreadId: thread.id,
+        })),
+
       stop: () => {
         controller?.abort();
         controller = null;
         set({ sending: false });
+        // 注意:这里只断开【本地这条流】,服务端的 agent 会继续跑完并落库。
+        // 保留 pendingRun 是有意的 —— 用户下次进来还能看到结果,钱没白花。
+      },
+
+      resumeIfPending: async () => {
+        const p = loadPendingRun();
+        if (!p) return;
+
+        /** 定位到上次那条助手消息;它可能已被删会话清掉 —— 那就无处可恢复。 */
+        const patch = (fn: (m: Message) => Message) =>
+          set((s) => ({
+            messages: {
+              ...s.messages,
+              [p.threadId]: (s.messages[p.threadId] ?? []).map((m) =>
+                m.id === p.msgId ? fn(m) : m,
+              ),
+            },
+          }));
+        if (!(get().messages[p.threadId] ?? []).some((m) => m.id === p.msgId)) {
+          clearPendingRun();
+          return;
+        }
+
+        try {
+          const run = await getRun(p.runId);
+          if (run.status === "running") {
+            // 还在跑:重新订阅,把已产生的内容补上并继续接收
+            set({ sending: true });
+            patch((m) => ({ ...m, content: "", streaming: true }));
+            controller = new AbortController();
+            await resumeRun(
+              p.runId,
+              (e) => {
+                patch((message) => applyEvent(message, e));
+              },
+              controller.signal,
+            );
+          } else {
+            // 已结束:直接把最终答案(或失败原因)填回去
+            patch((m) => ({
+              ...m,
+              content: run.answer ?? m.content,
+              error: run.error ?? undefined,
+            }));
+          }
+        } catch {
+          // 恢复失败(运行已过期/被清理)不该报错打扰用户,静默放弃即可
+        } finally {
+          clearPendingRun();
+          set({ sending: false });
+          patch((m) => ({
+            ...m,
+            streaming: false,
+            tools: (m.tools ?? []).map((t) => ({ ...t, done: true })),
+          }));
+        }
       },
 
       send: async (text) => {
@@ -98,33 +229,21 @@ export const useStore = create<State>()(
           }));
 
         controller = new AbortController();
+        let streamError: string | null = null;
         try {
           await streamChat(
             { threadId, message: text },
             (e) => {
-              patch((m) => {
-                switch (e.type) {
-                  case "thinking":
-                    return { ...m, thinking: (m.thinking ?? "") + e.text };
-                  case "answer":
-                    return { ...m, content: m.content + e.text };
-                  case "tool_start": {
-                    const tools = m.tools ?? [];
-                    if (tools.some((t) => t.name === e.name)) return m;
-                    return { ...m, tools: [...tools, { name: e.name, done: false }] };
-                  }
-                  case "tool_end":
-                    return {
-                      ...m,
-                      tools: (m.tools ?? []).map((t) =>
-                        t.name === e.name ? { ...t, done: true } : t,
-                      ),
-                    };
-                }
-              });
+              if (e.type === "run") {
+                savePendingRun({ runId: e.run_id, threadId, msgId: botMsg.id });
+              }
+              if (e.type === "error") streamError = e.text;
+              patch((message) => applyEvent(message, e));
             },
             controller.signal,
           );
+          if (streamError) throw new Error(streamError);
+          clearPendingRun(); // 正常收尾,不再需要恢复
           // 流结束:把还挂着的工具标记为完成,避免出现永远转圈的进度
           patch((m) => ({
             ...m,
@@ -138,6 +257,7 @@ export const useStore = create<State>()(
             streaming: false,
             error: aborted ? undefined : err instanceof Error ? err.message : "请求失败",
           }));
+          if (!aborted) throw err;
         } finally {
           controller = null;
           set({ sending: false });
@@ -146,6 +266,7 @@ export const useStore = create<State>()(
     }),
     {
       name: "ruixue-chat",
+      version: 1,
       storage: createJSONStorage(() => localStorage),
       // 只持久化这三项;sending 这类瞬时状态不存
       partialize: (s) => ({
