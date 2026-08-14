@@ -67,16 +67,20 @@ export async function submitCredentials(
 }
 
 /** 校验本地令牌是否仍有效(过期/被改 → false)。 */
-export async function verifyToken(): Promise<boolean> {
+export type TokenStatus = "valid" | "invalid" | "unreachable";
+
+export async function verifyToken(): Promise<TokenStatus> {
   const token = getToken();
-  if (!token) return false;
+  if (!token) return "invalid";
   try {
     const r = await fetch(`${BASE}/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
     });
-    return r.ok;
+    if (r.ok) return "valid";
+    if (r.status === 401 || r.status === 403) return "invalid";
+    return "unreachable";
   } catch {
-    return false; // 网络不通时不误判为"未登录",由调用方决定是否放行
+    return "unreachable";
   }
 }

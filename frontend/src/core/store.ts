@@ -8,7 +8,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
 import { getRun, resumeRun, streamChat } from "./api";
-import type { Message, Thread } from "./types";
+import type { Message, StreamEvent, Thread } from "./types";
 
 interface State {
   threads: Thread[];
@@ -20,6 +20,7 @@ interface State {
   newThread: () => string;
   selectThread: (id: string) => void;
   deleteThread: (id: string) => void;
+  restoreThread: (thread: Thread, threadMessages: Message[]) => void;
   send: (text: string) => Promise<void>;
   stop: () => void;
   /** 页面加载时调用:若上次有未看完的运行,取回其结果。 */
@@ -42,10 +43,7 @@ let controller: AbortController | null = null;
  */
 type PendingRun = { runId: string; threadId: string; msgId: string };
 const PENDING_KEY = "ruixue.pendingRun";
-let pendingRun: PendingRun | null = null;
-
 const savePendingRun = (p: PendingRun) => {
-  pendingRun = p;
   try {
     localStorage.setItem(PENDING_KEY, JSON.stringify(p));
   } catch {
@@ -53,7 +51,6 @@ const savePendingRun = (p: PendingRun) => {
   }
 };
 const clearPendingRun = () => {
-  pendingRun = null;
   try {
     localStorage.removeItem(PENDING_KEY);
   } catch {
@@ -66,6 +63,34 @@ const loadPendingRun = (): PendingRun | null => {
     return raw ? (JSON.parse(raw) as PendingRun) : null;
   } catch {
     return null;
+  }
+};
+
+/** 把后端事件归并到一条助手消息。发送与断线恢复必须共用同一套规则。 */
+const applyEvent = (message: Message, event: StreamEvent): Message => {
+  switch (event.type) {
+    case "thinking":
+      return { ...message, thinking: (message.thinking ?? "") + event.text };
+    case "answer":
+      return { ...message, content: message.content + event.text };
+    case "tool_start": {
+      const tools = message.tools ?? [];
+      if (tools.some((tool) => tool.name === event.name)) return message;
+      return { ...message, tools: [...tools, { name: event.name, done: false }] };
+    }
+    case "tool_end":
+      return {
+        ...message,
+        tools: (message.tools ?? []).map((tool) =>
+          tool.name === event.name ? { ...tool, done: true } : tool,
+        ),
+      };
+    case "run":
+      return { ...message, runId: event.run_id };
+    case "error":
+      return { ...message, error: event.text };
+    case "done":
+      return message;
   }
 };
 
@@ -94,12 +119,23 @@ export const useStore = create<State>()(
           const threads = s.threads.filter((t) => t.id !== id);
           const messages = { ...s.messages };
           delete messages[id];
+          const activeRun = loadPendingRun();
+          if (activeRun?.threadId === id) clearPendingRun();
           return {
             threads,
             messages,
             currentThreadId: s.currentThreadId === id ? (threads[0]?.id ?? null) : s.currentThreadId,
           };
         }),
+
+      restoreThread: (thread, threadMessages) =>
+        set((state) => ({
+          threads: state.threads.some((item) => item.id === thread.id)
+            ? state.threads
+            : [thread, ...state.threads],
+          messages: { ...state.messages, [thread.id]: threadMessages },
+          currentThreadId: thread.id,
+        })),
 
       stop: () => {
         controller?.abort();
@@ -138,8 +174,7 @@ export const useStore = create<State>()(
             await resumeRun(
               p.runId,
               (e) => {
-                if (e.type === "answer") patch((m) => ({ ...m, content: m.content + e.text }));
-                else if (e.type === "error") patch((m) => ({ ...m, error: e.text }));
+                patch((message) => applyEvent(message, e));
               },
               controller.signal,
             );
@@ -194,43 +229,20 @@ export const useStore = create<State>()(
           }));
 
         controller = new AbortController();
+        let streamError: string | null = null;
         try {
           await streamChat(
             { threadId, message: text },
             (e) => {
-              patch((m) => {
-                switch (e.type) {
-                  case "thinking":
-                    return { ...m, thinking: (m.thinking ?? "") + e.text };
-                  case "answer":
-                    return { ...m, content: m.content + e.text };
-                  case "tool_start": {
-                    const tools = m.tools ?? [];
-                    if (tools.some((t) => t.name === e.name)) return m;
-                    return { ...m, tools: [...tools, { name: e.name, done: false }] };
-                  }
-                  case "tool_end":
-                    return {
-                      ...m,
-                      tools: (m.tools ?? []).map((t) =>
-                        t.name === e.name ? { ...t, done: true } : t,
-                      ),
-                    };
-                  // 后端在流的开头下发运行编号:记下来,刷新后凭它恢复现场。
-                  // 这条不改消息内容,只做副作用登记。
-                  case "run":
-                    pendingRun = { runId: e.run_id, threadId, msgId: botMsg.id };
-                    savePendingRun(pendingRun);
-                    return m;
-                  case "done":
-                    return m; // 收尾统一在流结束后做
-                  case "error":
-                    return { ...m, error: e.text };
-                }
-              });
+              if (e.type === "run") {
+                savePendingRun({ runId: e.run_id, threadId, msgId: botMsg.id });
+              }
+              if (e.type === "error") streamError = e.text;
+              patch((message) => applyEvent(message, e));
             },
             controller.signal,
           );
+          if (streamError) throw new Error(streamError);
           clearPendingRun(); // 正常收尾,不再需要恢复
           // 流结束:把还挂着的工具标记为完成,避免出现永远转圈的进度
           patch((m) => ({
@@ -245,6 +257,7 @@ export const useStore = create<State>()(
             streaming: false,
             error: aborted ? undefined : err instanceof Error ? err.message : "请求失败",
           }));
+          if (!aborted) throw err;
         } finally {
           controller = null;
           set({ sending: false });
@@ -253,6 +266,7 @@ export const useStore = create<State>()(
     }),
     {
       name: "ruixue-chat",
+      version: 1,
       storage: createJSONStorage(() => localStorage),
       // 只持久化这三项;sending 这类瞬时状态不存
       partialize: (s) => ({

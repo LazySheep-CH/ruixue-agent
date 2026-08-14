@@ -1,81 +1,162 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { ArrowUp, Paperclip, Square } from "lucide-react";
+import { AnimatePresence, m } from "motion/react";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
-/** 输入区:自增高、回车发送、流式中可停止。 */
+import { uploadDataset } from "~/core/api";
+
+import { moduleLabels, type WorkspaceModule } from "./workspace-data";
+
 export function Composer({
+  activeModule,
   value,
   onChange,
   onSend,
   onStop,
   sending,
 }: {
+  activeModule: WorkspaceModule;
   value: string;
-  onChange: (v: string) => void;
+  onChange: (value: string) => void;
   onSend: () => void;
   onStop: () => void;
   sending: boolean;
 }) {
-  const ref = useRef<HTMLTextAreaElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
 
-  // 随内容自增高(上限 140px 后内部滚动)
+  /** 上传成功后,把 dataset_id 写进输入框而不是直接发出去。
+   *
+   * 为什么不自动发送:上传是一个动作,提问是另一个。替用户决定"要问什么"
+   * 会发出他没打算发的请求(而且要花钱)。把编号和一句可编辑的话填进去,
+   * 他改两个字就能发 —— 主动权仍在他手上。
+   */
+  async function handleUpload(file: File) {
+    setUploading(true);
+    try {
+      const s = await uploadDataset(file);
+      const missed = s.unrecognized_columns.length
+        ? `,未识别的列:${s.unrecognized_columns.join("、")}`
+        : "";
+      toast.success(`已上传《${s.filename}》`, {
+        description: `${s.n_rows} 行,实测指标 ${s.targets.join("、") || "无"}${missed}`,
+      });
+      onChange(
+        `${value ? value + "\n" : ""}我上传了实测数据(数据集编号 ${s.dataset_id}),` +
+          `请帮我分析一下,和你们模型的预测差多少。`,
+      );
+      inputRef.current?.focus();
+    } catch (e: unknown) {
+      // 422 的 detail 是后端写给用户看的操作指引("请把列名改成……"),
+      // 必须原样透出 —— 换成"上传失败"等于把最有用的信息扔了。
+      toast.error("上传失败", {
+        description: e instanceof Error ? e.message : "请稍后重试。",
+        duration: 8000,
+      });
+    } finally {
+      setUploading(false);
+    }
+  }
+
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = Math.min(el.scrollHeight, 140) + "px";
+    const input = inputRef.current;
+    if (!input) return;
+    input.style.height = "22px";
+    input.style.height = `${Math.min(input.scrollHeight, 88)}px`;
   }, [value]);
 
   return (
-    <div className="bg-gradient-to-b from-transparent to-background px-6 pb-5 pt-3">
+    <div className="composer-dock">
       <form
-        onSubmit={(e) => {
-          e.preventDefault();
+        className="task-composer"
+        onSubmit={(event) => {
+          event.preventDefault();
           onSend();
         }}
-        className="mx-auto flex max-w-[46rem] items-end gap-2 rounded-[var(--radius)] border border-border bg-card
-          px-3.5 py-2.5 transition focus-within:border-brand/50
-          focus-within:ring-3 focus-within:ring-primary/10"
       >
         <textarea
-          ref={ref}
+          ref={inputRef}
           rows={1}
+          name="task-request"
+          autoComplete="off"
+          maxLength={2000}
           value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
+          onChange={(event) => onChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
               onSend();
             }
           }}
-          placeholder="问问地膜的降解、保墒、力学或用量……"
-          className="max-h-[140px] flex-1 resize-none bg-transparent px-0.5 py-1 outline-none"
+          aria-label="输入农业问题或任务"
+          placeholder={`继续${moduleLabels[activeModule]}…`}
         />
-        {sending ? (
+        <div className="composer-toolbar">
+          {/* 隐藏的原生 input:样式没法直接改,所以用按钮触发它。
+              accept 只是给文件选择器的提示,**不是校验** —— 真校验在后端
+              (改个扩展名就能绕过前端的 accept)。 */}
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".csv,text/csv"
+            hidden
+            onChange={(event) => {
+              const f = event.target.files?.[0];
+              // 先清空 value 再处理:不清的话连续选同一个文件不会触发 change,
+              // 用户会觉得"点了没反应"。
+              event.target.value = "";
+              if (f) void handleUpload(f);
+            }}
+          />
           <button
             type="button"
-            onClick={onStop}
-            title="停止生成"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-[11px] text-primary-foreground"
+            className="composer-icon"
+            disabled={uploading || sending}
+            onClick={() => fileRef.current?.click()}
+            aria-label="上传实测数据表(CSV)"
+            title="上传实测数据表(CSV)"
           >
-            ■
+            <Paperclip size={16} />
           </button>
-        ) : (
-          <button
-            type="submit"
-            disabled={!value.trim()}
-            title="发送"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary
-              text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-muted
-              disabled:text-muted-foreground"
-          >
-            ↑
-          </button>
-        )}
+          <span className="composer-connection"><i />实时智能体</span>
+          <span className="composer-hint">Enter 发送 · Shift + Enter 换行</span>
+          {value.length > 1800 ? <span className="composer-count">{value.length}/2000</span> : null}
+          <AnimatePresence mode="wait" initial={false}>
+            {sending ? (
+              <m.button
+                key="stop"
+                type="button"
+                className="send-button"
+                onClick={onStop}
+                aria-label="停止接收（后台任务会继续）"
+                initial={{ scale: 0.82, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.82, opacity: 0 }}
+                whileTap={{ scale: 0.9 }}
+              >
+                <Square size={10} fill="currentColor" />
+              </m.button>
+            ) : (
+              <m.button
+                key="send"
+                type="submit"
+                className="send-button"
+                disabled={!value.trim()}
+                aria-label="发送"
+                initial={{ scale: 0.82, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.82, opacity: 0 }}
+                whileTap={{ scale: 0.9 }}
+              >
+                <ArrowUp size={16} />
+              </m.button>
+            )}
+          </AnimatePresence>
+        </div>
       </form>
-      <p className="mx-auto mt-2 max-w-[46rem] text-center text-xs text-muted-foreground">
-        回车发送 · Shift+回车换行 · 结果由模型生成,仅供参考
-      </p>
     </div>
   );
 }
