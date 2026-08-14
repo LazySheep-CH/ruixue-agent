@@ -29,3 +29,7 @@ config/config.yaml
 
 # 视频/截图分析工具的临时产物,不进仓库
 .codex-video-frames/
+
+# ── 个人材料:评审/对外材料文档永不入库(2026-08-14,曾被推上公开仓库)──
+docs/private/
+docs/private/
