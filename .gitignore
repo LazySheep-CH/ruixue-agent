@@ -69,3 +69,7 @@ docker/nginx/www/
 
 # 评测运行结果(每次跑都会生成,不进库)
 runs/
+
+# ── 个人材料:评审/对外材料文档永不入库(2026-08-14,曾被推上公开仓库)──
+docs/private/
+docs/private/
