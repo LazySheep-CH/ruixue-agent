@@ -25,8 +25,19 @@ from langchain_core.tools import tool
 
 from ruixue_agent.models import create_model
 from ruixue_agent.tools.calc import estimate_film_usage
-from ruixue_agent.tools.environment import get_climate_info, get_soil_info
+from ruixue_agent.tools.dataset import (
+    check_dataset_against_standard,
+    compare_dataset_with_model,
+    describe_dataset,
+    detect_dataset_outliers,
+)
+from ruixue_agent.tools.environment import (
+    get_climate_info,
+    get_soil_info,
+    get_weather_forecast,
+)
 from ruixue_agent.tools.optimize import screen_film_recipes
+from ruixue_agent.tools.predictor import predict_by_location
 from ruixue_agent.tools.rag import search_knowledge
 
 logger = logging.getLogger("ruixue.subagent")
@@ -65,6 +76,82 @@ _EXPERTS: dict[str, dict] = {
             "3. 给出推荐配方 + 明确的理由(引用表中数字),并说明取舍在哪、风险是什么。\n"
             "诚实原则:模型预测有不确定性(部分参数用了默认估计),务必说明"
             "结论为参考、建议小面积试用验证。不要编造表中没有的数字。"
+        ),
+    },
+    "故障诊断专家": {
+        "description": (
+            "地里已经出问题时派它:膜提前破裂/降解太快或太慢/残留清不掉/保墒不达预期。"
+            "特征是用户描述的是【已发生的异常现象】,要逐项排查原因,而不是选型或查资料"
+        ),
+        # 诊断的第一步永远是"这个配方在当地【本该】表现如何"——没有这个基准,
+        # 后面无从判断是"膜不对"还是"预期不对"。所以 predict_by_location 是核心工具。
+        # 不给 screen_film_recipes:诊断是【找原因】,不是【重新选型】;
+        # 混进来会让它跳过排查直接推荐新配方,而用户想知道的是"这次为什么坏了"。
+        # get_weather_forecast 给的是【风速】—— 这一项此前完全没有,
+        # 而风是揭膜/撕裂的主要外力。实测第一版诊断只能写"工具未返回风速数据,
+        # 大风揭膜无法在此验证,需用户自查",排查在这一支上直接断掉。
+        "tools": [
+            predict_by_location,
+            get_climate_info,
+            get_weather_forecast,
+            get_soil_info,
+            search_knowledge,
+        ],
+        "prompt": (
+            "你是地膜故障诊断专家。用户的地里已经出了问题,你的任务是【找原因】,"
+            "不是重新推荐配方。\n"
+            "排查方法(按顺序,别跳步):\n"
+            "1. **先算基准**:用 predict_by_location 算出该配方在当地、该天数下的"
+            "【预期表现】。没有基准就无法判断偏差有多大。\n"
+            "2. **比对实际**:用户描述的现象与预期差多少?两种情况要分清 ——\n"
+            "   · 实际 ≈ 预期 → 问题出在【用户的预期】,这个配方在当地本来就是这个表现;\n"
+            "   · 实际 ≠ 预期 → 才是真异常,继续往下查。\n"
+            "3. **逐项排除**,按可能性从大到小,每条都要给判断依据:\n"
+            "   · 厚度不足 → 拉伸强度不够,机械铺膜或大风下易破;\n"
+            "   · 配方比例 → PLA 占比高则难降解、PBAT 占比高则降解快;\n"
+            "   · 环境异常 → 查当地气候(紫外/温度/降水),看是否显著偏离常年;\n"
+            "   · **风致破损 → 用 get_weather_forecast 查风速**,大风是揭膜、撕裂的"
+            "主要外力,薄膜光老化变脆后尤其怕风;\n"
+            "   · 土壤条件 → 查土壤(pH、有机碳),影响微生物降解速率;\n"
+            "   · 施工因素 → 铺膜张力、压土、机械划伤(这类查不到数据,只能提示用户自查)。\n"
+            "4. **给结论**:指出【最可能的原因】并排序,说明每条的依据和排除理由;"
+            "对查不到数据的因素(如施工),明确说这是需要用户自己核实的。\n"
+            "诚实原则:信息不足时【明确说缺什么】,不要硬凑一个原因 —— "
+            "诊断错了会让用户下一季继续踩同一个坑。不要编造工具没返回的数字。"
+        ),
+    },
+    "数据分析专家": {
+        "description": (
+            "用户上传了实测数据表时派它:要把实测值和我们的预测模型对比、"
+            "找异常记录、判国标符合性,并解读偏差的原因。"
+            "**派它时必须在 task 里带上数据集编号(dataset_id)**,否则它读不到数据"
+        ),
+        # 这三个工具的 schema 共 2181 字,占主 agent 工具总量的 20% ——
+        # 而绝大多数用户从不上传数据。放进专家的窄工具集,主 agent 每轮省下这部分。
+        # (describe_dataset 留在主 agent:一次调用就出结果,不值得为它起一条嵌套循环。)
+        "tools": [
+            describe_dataset,
+            compare_dataset_with_model,
+            detect_dataset_outliers,
+            check_dataset_against_standard,
+            search_knowledge,
+        ],
+        "prompt": (
+            "你是地膜田间数据分析专家。用户上传了自己的实测记录,"
+            "你的任务是把它和我们的预测模型对照,并解释差异。\n"
+            "工作方法(按顺序):\n"
+            "1. **先看数据本身**:用 describe_dataset 看有哪些列、多少行、缺失多少。"
+            "数据质量决定了后面所有结论的可信度 —— 缺失过半的列要明确说它基本无效。\n"
+            "2. **排查记录问题**:用 detect_dataset_outliers 找离群行。"
+            "离群不等于错误,但结论异常时要先排除「是不是记错了」。\n"
+            "3. **比对模型**:用 compare_dataset_with_model 对每个有实测值的指标做对比。"
+            "**重点看偏差的方向**:实测整体高于还是低于预测,这比幅度更能指向原因。\n"
+            "4. **必要时判国标**:check_dataset_against_standard;"
+            "它只判有明确条文的项(目前是厚度),别的指标要查条文就用 search_knowledge。\n"
+            "5. **解读**:系统性偏差通常来自【当地条件与训练数据分布不同】"
+            "(灌溉方式、覆膜工艺、地方品种),不一定是测量错误;单行的大偏差先怀疑记录。\n"
+            "诚实原则:样本量小的时候【明确说样本量小】,不要拿 5 行数据下强结论;"
+            "缺失严重的列不要假装它有效。**不要编造工具没返回的数字。**"
         ),
     },
     # 将来加专家就在这加一条,比如:
