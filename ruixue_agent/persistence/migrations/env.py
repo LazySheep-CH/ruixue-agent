@@ -33,12 +33,45 @@ config.set_main_option("sqlalchemy.url", database_url())
 target_metadata = Base.metadata
 
 
+# ── 不归我们管的表:autogenerate 必须无视它们 ─────────────────────
+#
+# ## 不加这个会出什么事(2026-08-13 实测,差点酿成事故)
+#
+# LangGraph 的 PostgresSaver 会在【同一个库】里自己建四张 checkpoint 表
+# (见 ruixue_agent/checkpointer.py 的 saver.setup())。它们不在 Base.metadata 里,
+# 于是 autogenerate 认为"库里有、模型里没有 → 应该删掉",生成的迁移里赫然写着:
+#
+#     op.drop_table('checkpoints')
+#     op.drop_table('checkpoint_writes')
+#     op.drop_table('checkpoint_blobs')
+#     op.drop_table('checkpoint_migrations')
+#
+# 跑下去就是**清空所有会话的执行状态** —— 而且迁移本身会"成功",
+# 没有任何报错,只有用户发现"我的对话怎么接不上了"。
+#
+# 这类风险的共性:**多个组件共用一个库,而只有一个组件持有"完整视图"**。
+# 解法不是"记得每次审一遍迁移"(迟早会忘),而是在生成期就把它们排除。
+_FOREIGN_TABLE_PREFIXES = ("checkpoint",)
+
+
+def include_object(obj, name, type_, reflected, compare_to):
+    """只让 autogenerate 看见【我们自己的】表。
+
+    reflected=True 表示"这个对象是从数据库里反射出来的";配合前缀判断,
+    就能把别的组件建的表排除在比对之外 —— 既不会被误删,也不会被误建。
+    """
+    if type_ == "table" and name and name.startswith(_FOREIGN_TABLE_PREFIXES):
+        return False
+    return True
+
+
 def run_migrations_offline() -> None:
     """离线模式:不连库,只把 SQL 打印出来(给 DBA 审核用 —— 大厂常见流程)。"""
     context.configure(
         url=config.get_main_option("sqlalchemy.url"),
         target_metadata=target_metadata,
         literal_binds=True,
+        include_object=include_object,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -52,7 +85,11 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,  # 迁移是一次性的,不需要连接池
     )
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            include_object=include_object,
+        )
         # PG 的 DDL 是【事务性】的(MySQL 不是!):
         # 一个 migration 里改 5 张表,中间失败 → 全部回滚,不会留下半吊子状态。
         with context.begin_transaction():

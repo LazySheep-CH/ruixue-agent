@@ -29,7 +29,7 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy.dialects.postgresql import TSVECTOR
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -334,4 +334,55 @@ class MemoryRow(Base):
         # 检索主路径:按用户 + 未删除 取记忆
         Index("idx_memories_user_alive", "user_id", "deleted"),
         {"comment": "长期记忆。一行 = 关于某用户的一条事实"},
+    )
+
+
+class DatasetRow(Base):
+    """用户上传的实测数据表(CSV/Excel)。
+
+    ## 为什么进数据库而不是文件系统
+
+    最直觉的做法是把上传的文件存到磁盘,工具再去读。那会引入三个新问题:
+    路径逃逸(文件名来自用户输入)、清理与配额(谁删、何时删、满了怎么办)、
+    以及"agent 需要一个能读文件的工具"——而我们所有工具目前都是只读且
+    不碰文件系统的。
+
+    存进 PG 之后:
+      · 归属校验和 runs 走同一套(user_id 必须匹配),猜到 id 也拿不到别人的;
+      · 工具只接收一个 uuid 形式的 dataset_id,**模型编不出别人的 id**;
+      · 删除就是一行 DELETE,没有孤儿文件;
+      · 备份跟着 PG 走,不用单独备一份文件目录。
+
+    和 ChunkRow 的取舍不同:那边正文大、行数多(26 万),值得单独设计;
+    这边上限 5000 行(见 analysis/schema.MAX_ROWS),整表塞 JSON 完全够用,
+    不值得为它再建一张"数据行"表。
+
+    ## columns 存的是【映射结果】不是原始表头
+
+    上传时就把用户的列名归一到模型特征名(见 analysis/schema.map_columns),
+    并把"认出了什么、没认出什么"一起存下来。这样分析工具拿到的是确定的结构,
+    不必每次重新猜列名 —— **归一只做一次,做在入口**。
+    """
+
+    __tablename__ = "datasets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    dataset_id: Mapped[str] = mapped_column(String(36), unique=True, index=True, nullable=False)
+    user_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    # 原始文件名,只用于展示。**不用它拼路径**(我们根本不落盘),也不进 HTTP 头。
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    n_rows: Mapped[int] = mapped_column(Integer, nullable=False)
+    n_cols: Mapped[int] = mapped_column(Integer, nullable=False)
+    # {"features": {标准名: 原列名}, "targets": {DR/TS/WVTR: 原列名}, "unknown": [...]}
+    columns: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    # 数据行:[{标准名或原列名: 值}, ...]。上限 5000 行,JSONB 足够。
+    rows: Mapped[list] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+
+    __table_args__ = (
+        # 列表页主路径:按用户列最近上传的
+        Index("idx_datasets_user_time", "user_id", "created_at"),
+        {"comment": "用户上传的实测数据表。一行 = 一次上传"},
     )
