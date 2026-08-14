@@ -13,7 +13,7 @@ from ruixue_agent.predictors.predict import predict_text
 
 @tool
 def predict_degradation(inputs: dict) -> str:
-    """预测生物降解地膜的【降解率】(%,越高降解越多)。
+    """预测生物降解地膜的降解率(%,越高降解越多)。
 
     参数 inputs:已知参数的字典,键用特征名。常用:
       PLA_pct, PBAT_pct(配方比例%)、Thickness_um(厚度µm)、Time_days(埋后天数)、
@@ -27,7 +27,7 @@ def predict_degradation(inputs: dict) -> str:
 
 @tool
 def predict_water_vapor_rate(inputs: dict) -> str:
-    """预测地膜的【水蒸气透过率 WVTR】(g/m²·d,越低保墒越好)。
+    """预测地膜的水蒸气透过率 WVTR(g/m²·d,越低保墒越好)。
 
     参数 inputs:已知参数字典。常用:PLA_pct, PBAT_pct, Thickness_um(厚度)、
       Temperature_C、Humidity(湿度%)、Precipitation_mm、UV、Additive Type、Color 等。
@@ -38,7 +38,7 @@ def predict_water_vapor_rate(inputs: dict) -> str:
 
 @tool
 def predict_tensile_strength(inputs: dict) -> str:
-    """预测地膜的【拉伸强度】(MPa,越高越结实)。
+    """预测地膜的拉伸强度(MPa,越高越结实)。
 
     参数 inputs:已知参数字典。常用:PLA_pct, PBAT_pct(配方)、Thickness_um、
       Additive Type、Time_days、Temperature_C 等。
@@ -49,7 +49,7 @@ def predict_tensile_strength(inputs: dict) -> str:
 
 @tool
 def predict_by_location(place: str, days: int, recipe: dict | None = None) -> str:
-    """【推荐】按【地点】预测地膜三大性能:自动查该地土壤+气候,不用用户填环境参数。
+    """推荐按地点预测地膜三大性能:自动查该地土壤+气候,不用用户填环境参数。
 
     用户只需说地点、用多少天、什么配方,本工具自动补齐环境:
       土壤(pH/有机质/质地等)← 该县 SoilGrids 数据

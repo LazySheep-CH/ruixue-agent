@@ -11,7 +11,7 @@
 1) 噪声地板(noise floor) —— 同一版本重复跑 N 次,看指标自己抖多少。
    这是"什么都没改"时的差异下限。新旧差异没超过它 = 什么都没证明。
 
-2) 配对符号检验 —— 两个版本跑的是【同一套题】,所以不该比两个平均分,
+2) 配对符号检验 —— 两个版本跑的是同一套题,所以不该比两个平均分,
    而该逐题配对看:有多少题从错变对(b),多少题从对变错(c)。
    若真的没差别,一道题往哪个方向翻应该是五五开;于是 b、c 服从
    二项分布 B(b+c, 0.5),算个精确双侧 p 值即可。
@@ -41,7 +41,7 @@ class Report:
     n: int = 0
     passed: int = 0
     by_category: dict[str, tuple[int, int]] = field(default_factory=dict)  # 类别 -> (过, 总)
-    # None 表示【不适用】(这批题里没有需要调工具的),不是 0 分。
+    # None 表示不适用(这批题里没有需要调工具的),不是 0 分。
     # 用 0.0 表示不适用会在报告里显示成 "precision 0.000",看着像糟透了 ——
     # 把"没这回事"和"做得很差"显示成同一个样子,是最容易误导人的一类 bug。
     tool_precision: float | None = None
@@ -55,7 +55,7 @@ class Report:
     per_case: dict[str, bool] = field(default_factory=dict)  # 配对比较要用
     # 题面指纹:题号 → 问题文本的哈希。
     #
-    # 为什么必须存:配对比较是按【题号】配的。如果哪天改了某道题的题面却沿用
+    # 为什么必须存:配对比较是按题号配的。如果哪天改了某道题的题面却沿用
     # 原题号,对比就会把两道不同的题当成同一道 —— 静默给出错误结论,而且几乎
     # 查不出来。实测就干过一次(rf04 换了题面沿用原号)。存指纹后能直接拦下。
     case_hashes: dict[str, str] = field(default_factory=dict)
@@ -82,7 +82,7 @@ def aggregate(scores: list[CaseScore], traces=None, cases=None) -> Report:
         ok, tot = rep.by_category.get(s.category, (0, 0))
         rep.by_category[s.category] = (ok + int(s.passed), tot + 1)
 
-    # 工具指标只在【确实期望调工具】的题上平均。
+    # 工具指标只在确实期望调工具的题上平均。
     # 把 no_tool 题的 recall(恒为 1)混进来会把整体拉高,看着好看但没意义。
     routed = [s for s in scores if s.category in ("tool_route", "multi_tool", "knowledge")]
     if routed:
@@ -122,8 +122,8 @@ def per_case_stability(reports: list[Report]) -> dict:
     """逐题稳定性:哪几道题在重复跑之间会翻来翻去。
 
     为什么总通过率的极差不够:
-    极差只告诉你"整体抖 6%",但 6% 可能是【同两道题反复翻】,也可能是
-    【每次都是不同的题在翻】。这两种情况的处理方式完全不同:
+    极差只告诉你"整体抖 6%",但 6% 可能是同两道题反复翻,也可能是
+    每次都是不同的题在翻。这两种情况的处理方式完全不同:
 
         固定几道题不稳 → 那几道题本身写得含糊,或者 agent 在那类问题上确实摇摆
                          → 该修用例或修 agent
@@ -151,7 +151,7 @@ def per_case_stability(reports: list[Report]) -> dict:
 
 
 def consensus(reports: list[Report], categories: dict[str, str] | None = None) -> Report:
-    """把多轮结果合成一份【共识报告】:每道题按多数票定输赢。
+    """把多轮结果合成一份共识报告:每道题按多数票定输赢。
 
     categories:题号 → 类别。给了才能重算分类别统计(Report 里不含逐题类别)。
 
@@ -182,7 +182,7 @@ def consensus(reports: list[Report], categories: dict[str, str] | None = None) -
     for key in ("avg_tokens", "avg_latency_ms", "avg_tool_calls"):
         setattr(out, key, statistics.fmean(getattr(r, key) for r in reports))
 
-    # 分类别按共识逐题重算,【不能】把各轮的分子分母相加 ——
+    # 分类别按共识逐题重算,不能把各轮的分子分母相加 ——
     # 那样 3 轮会变成 "9/12",看着像 12 道题,实际只有 4 道,读者会误判样本量。
     if categories:
         for cid, ok in per.items():
@@ -230,7 +230,7 @@ def compare(base: Report, cur: Report, floor: float = 0.0, alpha: float = 0.05) 
            哪怕 p 值好看 —— p 值只说"翻转不像随机",不管翻转是不是温度导致的。
     """
     common = set(base.per_case) & set(cur.per_case)
-    # 题号相同但【题面变了】的,不能拿来配对 —— 那是两道不同的题。
+    # 题号相同但题面变了的,不能拿来配对 —— 那是两道不同的题。
     # 静默比下去会给出看似合理、实则毫无意义的结论。
     changed = tuple(
         sorted(
@@ -242,7 +242,7 @@ def compare(base: Report, cur: Report, floor: float = 0.0, alpha: float = 0.05) 
         )
     )
     common -= set(changed)
-    # 基线是加指纹功能【之前】存的 → 无从判断题面变没变。
+    # 基线是加指纹功能之前存的 → 无从判断题面变没变。
     # 这时候必须明说"没法验证",而不是默认可比 —— 默认可比正是这个守卫要防的事。
     # 实测就吃过一次:rf04 换了题面,对比却把它算成"变好",差点当成改动生效。
     unverifiable = not base.case_hashes and bool(cur.case_hashes)

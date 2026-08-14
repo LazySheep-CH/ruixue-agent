@@ -1,14 +1,14 @@
 """数据库连接管理。
 
-为什么用【连接池】而不是每次新建连接:
+为什么用连接池而不是每次新建连接:
     建一条 PG 连接要 TCP 握手 + 认证 + fork 后端进程,几十毫秒。
     灌 26 万 chunk 时如果每次新建,光建连接就能耗掉几十分钟。
     连接池 = 一开始建好 N 条,用完还回去,下次直接拿。
 
-为什么用【同步】而不是 async(deer-flow 用的是 async):
+为什么用同步而不是 async(deer-flow 用的是 async):
     deer-flow 是 web 服务:大量并发请求、每个请求大部分时间在等 IO → async 能让一个线程服务上千请求。
     我们是 ETL 批处理:一个进程灌数据、瓶颈在数据库写入而不是等待 → async 只增加复杂度,不提速。
-    选型看【工作负载】,不是看哪个词更时髦。
+    选型看工作负载,不是看哪个词更时髦。
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from sqlalchemy import Engine, create_engine
 
-# docker/.env 在【仓库根】(docker 编排属于仓库级,不属于 backend)——
+# docker/.env 在仓库根(docker 编排属于仓库级,不属于 backend)——
 # 从 backend/ruixue_agent/persistence/ 向上四级。容器内无此文件,凭据走环境变量。
 _DOCKER_ENV = Path(__file__).resolve().parents[3] / "docker" / ".env"
 
@@ -34,7 +34,7 @@ def database_url() -> str:
     user = os.environ["POSTGRES_USER"]
     password = os.environ["POSTGRES_PASSWORD"]
     db = os.environ["POSTGRES_DB"]
-    # 主机名必须可配:本机开发连回环,但【容器里的 localhost 是容器自己】,
+    # 主机名必须可配:本机开发连回环,但容器里的 localhost 是容器自己,
     # 得连服务名 postgres。写死的话 app 一进容器就连不上数据库。
     #
     # 注意:默认值用 127.0.0.1 而不是 localhost —— 实测差 200 倍(0.05s vs 10.13s):
@@ -53,19 +53,19 @@ def database_url() -> str:
 def get_engine() -> Engine:
     """全进程共用一个 Engine(内含连接池)。lru_cache 保证只建一次。
 
-    池大小怎么定 —— 要和【实际并发】对齐,不是拍个数:
+    池大小怎么定 —— 要和实际并发对齐,不是拍个数:
 
-        注意:【2026-08-10 实测修正】原来这里按"每 worker 满池 30 条"推算,
+        注意:2026-08-10 实测修正原来这里按"每 worker 满池 30 条"推算,
           得出"最多 3~4 个 worker"。压测实测发现这个算式过于保守约一倍:
 
               4 个 worker 压测中,PG 实际连接数只有 54/100(不是预测的 120)
 
-          原因:SQLAlchemy 的连接池是【懒建】的 —— pool_size=10 是"最多留 10 条
+          原因:SQLAlchemy 的连接池是懒建的 —— pool_size=10 是"最多留 10 条
           空闲",不是"启动就占 10 条"。实际用多少建多少。
-          所以那个算式是【最坏情况上界】,不是实际用量;拿它当扩容红线会
+          所以那个算式是最坏情况上界,不是实际用量;拿它当扩容红线会
           白白限制住本可以加的 worker。
 
-        真正的红线【不是连接数,是内存】—— 见 runs.py 里 MAX_CONCURRENT_RUNS
+        真正的红线不是连接数,是内存—— 见 runs.py 里 MAX_CONCURRENT_RUNS
         上面的压测记录:每个 worker 要各自加载一份嵌入模型 + 三个树模型,
         约 520MB;4GB 上限下最多 7 个,8 个就撞顶、16 个直接雪崩。
 

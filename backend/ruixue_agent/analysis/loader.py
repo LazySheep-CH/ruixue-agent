@@ -3,7 +3,7 @@
 只认 CSV,不认 Excel:
 Excel 要多一个依赖(openpyxl),而且 `.xlsx` 里可以嵌公式、宏、外部链接 ——
 解析器的攻击面比纯文本大一个量级。田间数据表从 Excel 另存为 CSV 是一步操作,
-不值得为这一步便利引入那个面。能用受限格式做到的,不开放通用格式。
+不值得为这点便利引入那个攻击面。
 
 编码:必须自己判,不能假定 UTF-8:
 用户的表大多是从 Excel 导出的,Windows 上默认是 GBK/GB18030。
@@ -30,7 +30,7 @@ import re
 from ruixue_agent.analysis.schema import ColumnMap, DatasetError, validate
 
 # 上传体积上限。5000 行 × 80 列的纯数字 CSV 约 2MB,留一倍余量。
-# 这道闸门在【读进内存之前】就该拦 —— 见 app 层的上传端点。
+# 这道闸门在读进内存之前就该拦 —— 见 app 层的上传端点。
 MAX_BYTES = 4 * 1024 * 1024
 
 # 按可能性排序。gb18030 是 gbk 的超集,放在 gbk 之后能兜住生僻字。
@@ -75,7 +75,7 @@ def parse_number(cell: str) -> float | None:
 def load_csv(raw: bytes) -> tuple[ColumnMap, list[dict]]:
     """解析上传的 CSV,返回 (列映射, 数据行)。不合契约抛 DatasetError。
 
-    数据行的键用【标准特征名】(如 PLA_pct),值为 float 或 None ——
+    数据行的键用标准特征名(如 PLA_pct),值为 float 或 None ——
     归一只做一次,做在入口。下游拿到的结构是确定的,不必再猜列名。
     """
     if not raw:

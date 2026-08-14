@@ -1,4 +1,4 @@
-"""从一次 agent 运行里抽出可判分的【轨迹】。
+"""从一次 agent 运行里抽出可判分的轨迹。
 
 为什么单独抽一层,而不是在判分时直接翻 messages:
 判分要回答的是"工具选对了吗、答案里有没有这几个要点";它不该关心
@@ -41,7 +41,7 @@ class Trace:
     # 前者是系统问题,后者是能力问题,混在一起会误导优化方向。
     interrupted: bool = False
     error: str = ""
-    # 本次运行里发生的【子 agent 委派】账单。
+    # 本次运行里发生的子 agent 委派账单。
     #
     # 为什么必须单独收:子 agent 的消息不进父状态,所以它烧的 token
     # 完全不在下面 input_tokens/output_tokens 里 —— 只要发生委派,
@@ -50,7 +50,7 @@ class Trace:
     subagent_runs: list = field(default_factory=list)
     # 执行失败的工具名。工具挂了(Milvus 断连等)会被中间件降级成一条提示,
     # agent 于是老实回"该功能暂时不可用"—— 判分若按"缺要点"算,就把
-    # 【环境问题】记成了【能力问题】,你会去改提示词,而实际上要修的是 Milvus。
+    # 环境问题记成了能力问题,你会去改提示词,而实际上要修的是 Milvus。
     failed_tools: list[str] = field(default_factory=list)
 
     @property
@@ -64,7 +64,7 @@ class Trace:
 
     @property
     def total_tokens(self) -> int:
-        """总 token = 父 agent + 【所有子 agent】。
+        """总 token = 父 agent + 所有子 agent。
 
         漏掉子 agent 的那部分是真发生过的 bug:成本指标偏低,
         而版本对比正是拿它比的。
@@ -137,7 +137,7 @@ def extract(case_id: str, state: dict, latency_ms: int) -> Trace:
         usage = getattr(m, "usage_metadata", None) or {}
         tr.input_tokens += usage.get("input_tokens", 0)
         tr.output_tokens += usage.get("output_tokens", 0)
-        # 最终答案 = 最后一条【不带工具调用】的 AI 消息。
+        # 最终答案 = 最后一条不带工具调用的 AI 消息。
         # 不能简单取 messages[-1]:带 HITL 时最后一条可能是中断标记。
         if not (getattr(m, "tool_calls", None) or []):
             txt = _text(getattr(m, "content", ""))

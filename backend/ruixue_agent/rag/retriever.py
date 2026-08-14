@@ -44,7 +44,7 @@ class Hit:
     section_path: list[str]  # 出处:章节路径
     page_start: int
     page_end: int
-    # 文档标题与年份。年份不是"锦上添花的元数据",是【纠错所必需的上下文】:
+    # 文档标题与年份。年份不是"锦上添花的元数据",是纠错所必需的上下文:
     # 库里有 1990~2026 年的资料,不标年份,2023 年文档里的价格就会被当成现价答出去。
     # 详见 PgRepository.get_documents_meta 的说明。
     title: str | None = None
@@ -83,7 +83,7 @@ class Retriever:
     ) -> list[Hit]:
         """检索并返回 top-k 父块,附相关度与出处。"""
         # 0. 查询改写(可选):口语→术语再检索,补 embedding 对口语的弱势。改写只用于
-        #    【检索】(向量+词法);重排仍喂【原始问题】—— 重排匹配的是用户真实意图,
+        #    检索(向量+词法);重排仍喂原始问题—— 重排匹配的是用户真实意图,
         #    不是改写后的措辞。改写器自带闸门(术语题原样放过),失败自动回退原查询。
         retr_query = self.rewriter.rewrite(query) if self.rewriter else query
 
@@ -141,7 +141,7 @@ class Retriever:
         # 7. 组装并截断。出处字段(document_id / section_path / 页码)必须携带:
         #    生成层要标引用,使用方要能核实答案来源。
         top = parents[:k]
-        # 只给【最终返回的这几条】查标题年份 —— 先截断再查,别为被丢弃的候选付查询代价。
+        # 只给最终返回的这几条查标题年份 —— 先截断再查,别为被丢弃的候选付查询代价。
         meta = self.repo.get_documents_meta([p.document_id for p in top])
         return [
             Hit(

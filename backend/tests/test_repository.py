@@ -1,6 +1,6 @@
 """PgRepository 的规格说明书。
 
-这些测试就是 repository.py 的【需求】—— 先读懂每个测试要什么,再去实现。
+这些测试就是 repository.py 的需求—— 先读懂每个测试要什么,再去实现。
 测试全绿 = 功能做完了。这就是 TDD:测试是规格,不是事后补的作业。
 
 每个测试跑在事务里,测完自动回滚(见 conftest.py),所以可以放心往库里插。
@@ -79,7 +79,7 @@ def repo(session) -> PgRepository:
 
 
 def test_save_document_maps_meta_to_columns(repo, session):
-    """Document.meta 里的字段要落到【真正的列】上,不是塞进一个 JSON 大字段。
+    """Document.meta 里的字段要落到真正的列上,不是塞进一个 JSON 大字段。
 
     为什么:列才能建索引、才能 WHERE year > 2020、才有类型检查。
     塞 JSON = 把数据库当文件用,那还不如不用数据库。
@@ -94,7 +94,7 @@ def test_save_document_maps_meta_to_columns(repo, session):
 
 
 def test_save_document_tolerates_missing_meta(repo, session):
-    """元数据抽不全是【常态】,不是异常。
+    """元数据抽不全是常态,不是异常。
 
     实测覆盖率:title 97.6% / year 84.9% / doi 34.4% —— 意味着
     238 篇没有 year。没有就是 NULL,不能因此拒绝入库、更不能崩。
@@ -117,7 +117,7 @@ def test_save_document_tolerates_missing_meta(repo, session):
 
 
 def _count(session, model, **where) -> int:
-    """只数【我们关心的那些行】,不数全表。
+    """只数我们关心的那些行,不数全表。
 
     为什么不用 session.query(X).count():那是在数全表,等于假设"库里只有我的测试数据"。
     库里一旦有别的东西(比如真实数据、别的测试留下的),断言就红 ——
@@ -131,7 +131,7 @@ def test_save_document_twice_is_idempotent(repo, session):
     """核心需求:同一篇存两次 = 库里还是 1 行,且不报错。
 
     为什么这条最重要:灌 1578 篇的过程中挂了(网断/OOM/手滑 Ctrl-C),
-    你必须能【直接重跑】。如果重跑会因为主键冲突炸掉,你就只能
+    你必须能直接重跑。如果重跑会因为主键冲突炸掉,你就只能
     "先全删再重来" —— 那 26 万条就没有断点续传,每次失败都从零开始。
 
     这就是 document_id = 内容寻址(sha256前16位)真正兑现价值的地方:
@@ -143,7 +143,7 @@ def test_save_document_twice_is_idempotent(repo, session):
 
 
 def test_save_document_twice_updates_content(repo, session):
-    """幂等 ≠ 忽略第二次。第二次的内容要【覆盖】掉第一次。
+    """幂等 ≠ 忽略第二次。第二次的内容要覆盖掉第一次。
 
     场景:metadata 抽取算法改进了,重跑管道 —— 新抽出来的 title 得生效,
     而不是"已经有了就跳过"(那样你的改进永远进不了库)。
@@ -172,12 +172,12 @@ def test_save_chunks_writes_parent_and_children(repo, session):
 
 
 def test_save_chunks_handles_child_before_parent(repo, session):
-    """核心需求:哪怕子块【排在父块前面】传进来,也要能存进去。
+    """核心需求:哪怕子块排在父块前面传进来,也要能存进去。
 
     为什么会炸:chunks 表有自引用外键 parent_id → chunks.chunk_id。
     先插子块时,它爹还不存在 → PG 直接拒绝(违反外键)。
 
-    chunk_document() 现在恰好是父在前,但 repository 不该【依赖调用方的顺序】——
+    chunk_document() 现在恰好是父在前,但 repository 不该依赖调用方的顺序——
     那是隐形契约,哪天有人改了 chunk 的实现,这里就神秘炸掉。
     自己保证顺序,是这个方法的职责。
     """
@@ -241,9 +241,9 @@ def test_tsv_is_populated_by_trigger(repo, session):
 
 
 def test_get_chunks_returns_in_requested_order(repo, session):
-    """Milvus 返回一串 chunk_id,我们拿它去 PG 取文本 —— 顺序必须是【相似度顺序】。
+    """Milvus 返回一串 chunk_id,我们拿它去 PG 取文本 —— 顺序必须是相似度顺序。
 
-    坑:SQL 的 WHERE chunk_id IN (...) 【不保证】按你给的顺序返回,
+    坑:SQL 的 WHERE chunk_id IN (...) 不保证按你给的顺序返回,
     数据库爱怎么返回怎么返回。直接用 = 相似度排名被打乱,
     而且这个 bug 不报错,只是答案悄悄变差(最难查的那种)。
     """
@@ -272,7 +272,7 @@ def test_get_chunks_missing_ids_are_skipped(repo, session):
     """要的 ID 不存在时:跳过,不是崩。
 
     真实场景:Milvus 和 PG 短暂不同步(PG 里删了文档,Milvus 索引还没重建)。
-    索引指向了不存在的数据 —— 这是【正常的最终一致】,不是错误。
+    索引指向了不存在的数据 —— 这是正常的最终一致,不是错误。
     """
     repo.save_document(_doc())
     repo.save_chunks(_chunks())

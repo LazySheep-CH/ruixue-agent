@@ -26,7 +26,7 @@ WINDOW_HOURS = 1
 def _fmt(name: str, value: float, help_text: str, labels: str = "", kind: str = "gauge") -> str:
     """渲染一条指标。labels 单独传,不能拼进 name。
 
-    Prometheus 的格式规定:`# HELP` / `# TYPE` 后面跟的是【不带标签的指标名】,
+    Prometheus 的格式规定:`# HELP` / `# TYPE` 后面跟的是不带标签的指标名,
     而且同一个名字只能声明一次。写成
         # HELP ruixue_dep_up{dep="redis"} ...
     是不合法的 —— 解析器会拒绝或行为未定义。

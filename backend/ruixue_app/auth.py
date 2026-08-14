@@ -7,7 +7,7 @@
 为什么保留两条:网页用户要的是"注册登录"体验;而机器对机器调用用 API Key
 更简单(不需要登录流程)。这也是 OpenAI / Anthropic 等平台的通行做法。
 
-返回的 user_id 会拼进 thread_id 做【命名空间隔离】(见 main.py),
+返回的 user_id 会拼进 thread_id 做命名空间隔离(见 main.py),
 保证用户只能读写自己的会话。
 """
 

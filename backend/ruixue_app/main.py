@@ -31,10 +31,10 @@ from ruixue_app.routes import auth as auth_routes
 # 用带 request_id 的结构化日志格式,替代默认的 logging.basicConfig。
 configure_logging()
 
-# agent 先占位;真正在服务【启动】时才建(见下面的 lifespan)。
+# agent 先占位;真正在服务启动时才建(见下面的 lifespan)。
 _agent = None
 
-# MCP server:把我们的工具暴露给【外部 agent】用。默认关闭,见 mcp_server 模块。
+# MCP server:把我们的工具暴露给外部 agent用。默认关闭,见 mcp_server 模块。
 # 在这里建(模块级)而不是 lifespan 里:挂载子应用必须在 app 建好后立刻做,
 # 而 lifespan 是启动时才跑,那时路由表已经定型了。
 _mcp = mcp_server.build_server()
@@ -45,9 +45,9 @@ async def lifespan(app: FastAPI):
     """服务的生命周期钩子:yield 之前 = 启动时跑一次;yield 之后 = 关闭时跑一次。
 
     为什么要它:之前 `_agent = create_ruixue_agent()` 写在模块顶层,
-    意味着【任何人 import 这个文件】都会立刻建 agent(连库、加载模型)。
+    意味着任何人 import 这个文件都会立刻建 agent(连库、加载模型)。
     跑测试、被别的脚本导入,都会莫名其妙连库。放进 lifespan 后,
-    只有真正【起服务】时才建,一次,之后所有请求复用同一个 agent。
+    只有真正起服务时才建,一次,之后所有请求复用同一个 agent。
     """
     global _agent
     _agent = create_ruixue_agent()
@@ -62,7 +62,7 @@ async def lifespan(app: FastAPI):
     except Exception:
         logging.getLogger("ruixue.app").warning("记忆库初始化失败,长期记忆将不可用", exc_info=True)
 
-    # MCP server 有【自己的 lifespan】(会话管理器)。挂进来的子应用不会自动跑它的
+    # MCP server 有自己的 lifespan(会话管理器)。挂进来的子应用不会自动跑它的
     # lifespan —— 必须在这里手动进上下文,否则请求会报 "task group is not initialized"。
     # 这是挂载 ASGI 子应用最常见的坑:路由通了、启动不报错,一发请求才崩。
     async with contextlib.AsyncExitStack() as stack:
@@ -74,19 +74,19 @@ async def lifespan(app: FastAPI):
     # 不做的话,每次重新部署都会把正在跑的运行连人带钱一起丢掉,
     # 而且用户要对着转圈等 15 分钟才被 reap_stale 清理。详见 runs.shutdown。
     # 放线程里跑:shutdown 内部要轮询等待(同步阻塞)最多 45 秒。
-    # 直接在 async 函数里调会【卡死事件循环】—— 连正在收尾的 SSE 都发不出去。
+    # 直接在 async 函数里调会卡死事件循环—— 连正在收尾的 SSE 都发不出去。
     await asyncio.to_thread(runs.shutdown)
 
 
 app = FastAPI(title="瑞雪地膜智能助手", lifespan=lifespan)
 
 # 请求追踪:每个请求发一个 request_id,贯穿日志、回写响应头。
-# 这是【HTTP 层】的中间件(套在整个请求外),和 agent 里的中间件是同一思想、不同层。
+# 这是HTTP 层的中间件(套在整个请求外),和 agent 里的中间件是同一思想、不同层。
 app.add_middleware(RequestIdMiddleware)
 
 # 跨域(CORS):前端是独立工程(frontend/),开发期由 Next 代理到这里,属同源;
 # 但前端一旦独立部署到别的域名,浏览器就会拦跨域请求 —— 故显式放行。
-# 【安全】只放行白名单来源,不用 "*"(带自定义头 X-API-Key 时 "*" 也不合法)。
+# 安全只放行白名单来源,不用 "*"(带自定义头 X-API-Key 时 "*" 也不合法)。
 ALLOWED_ORIGINS = [
     o.strip()
     for o in os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
@@ -105,7 +105,7 @@ app.add_middleware(
 
 # ── 限流(Rate Limiting)────────────────────────────────────────
 def _rate_key(request: Request) -> str:
-    """限流维度:按【谁】来限流(每个 key 一个独立的额度池)。"""
+    """限流维度:按谁来限流(每个 key 一个独立的额度池)。"""
     # 优先按 API Key(≈按用户,每个用户各自额度),取不到就按来源 IP
     return request.headers.get("X-API-Key") or get_remote_address(request)
 
@@ -132,7 +132,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.include_router(auth_routes.router)
 
 # MCP server 挂载。AuthGate 包在外层 —— 子应用不吃 FastAPI 的 Depends,
-# 鉴权必须在 ASGI 这一层做,否则是【静默无鉴权】(接口能通,只是没人验身份)。
+# 鉴权必须在 ASGI 这一层做,否则是静默无鉴权(接口能通,只是没人验身份)。
 if _mcp is not None:
     app.mount(mcp_server.MOUNT_PATH, mcp_server.AuthGate(_mcp.streamable_http_app()))
 
@@ -145,7 +145,7 @@ logger = logging.getLogger("ruixue.app")
 async def _handle_unexpected(request: Request, exc: Exception) -> JSONResponse:
     """未预料的异常统一兜底:任何没被单独处理的异常,最后都掉进这里。
 
-    原则:详情记【服务端日志】(供你排查),给用户返回【脱敏的通用消息】——
+    原则:详情记服务端日志(供你排查),给用户返回脱敏的通用消息——
     DB 连接串、文件路径、堆栈,绝不能出现在返回给用户的响应里(泄露内部结构=送攻击者情报)。
     注:401/422/429 这些是"有意的"错误,由各自的处理器返回正确状态码,不会走到这里。
     """
@@ -155,7 +155,7 @@ async def _handle_unexpected(request: Request, exc: Exception) -> JSONResponse:
 
 # ── 健康检查(可运维)──────────────────────────────────────────
 # 两种探针,别混:
-#   存活 /health       = "进程还活着吗" —— 挂了就重启它。故意【不查】数据库。
+#   存活 /health       = "进程还活着吗" —— 挂了就重启它。故意不查数据库。
 #   就绪 /health/ready = "能真正干活吗" —— 依赖(数据库)连不上时,虽活着但不该接流量。
 # 负载均衡 / K8s 靠这两个探针决定:要不要重启、要不要把流量切走。
 @app.get("/health")
@@ -227,7 +227,7 @@ class ResumeRequest(BaseModel):
 def _to_response(result: dict) -> ChatResponse:
     """把 agent 的返回统一成 ChatResponse。
 
-    开启人工批准(Human-in-the-Loop)后,agent 可能在工具执行前【暂停】,
+    开启人工批准(Human-in-the-Loop)后,agent 可能在工具执行前暂停,
     此时返回里没有最终答案,而是 __interrupt__ —— 需要客户端确认后调
     /chat/resume 继续。不开启时该分支永远不会走到。
     """
@@ -248,7 +248,7 @@ def chat(
     request: Request,  # slowapi 靠它拿限流 key,必须有这个参数
     req: ChatRequest,
     # enforce_quota 内部已含认证(Depends(get_current_user)),并额外消耗每日配额。
-    # 只挂在【会花钱】的端点上;健康检查、查土壤这类不花钱的不挂。
+    # 只挂在会花钱的端点上;健康检查、查土壤这类不花钱的不挂。
     user_id: str = Depends(enforce_quota),
 ) -> ChatResponse:
     thread_id = f"{user_id}:{req.thread_id}"  # 命名空间隔离:用户只能碰自己的对话
@@ -266,7 +266,7 @@ def chat_resume(
 ) -> ChatResponse:
     """对 /chat 返回的 pending 操作作出批准/拒绝,让对话继续。
 
-    thread_id 同样做命名空间隔离 —— 用户只能批准【自己】会话里的操作,
+    thread_id 同样做命名空间隔离 —— 用户只能批准自己会话里的操作,
     否则就能通过猜 thread_id 去批准别人的待确认操作(越权)。
     """
     from langgraph.types import Command
@@ -280,7 +280,7 @@ def chat_resume(
 def _execute_run(run_id: str, thread_id: str, message: str) -> None:
     """在后台线程里跑 agent,把过程事件发到该 Run 的流上。
 
-    这个函数【不绑请求生命周期】—— 客户端断了它照跑完,结果落库。
+    这个函数不绑请求生命周期—— 客户端断了它照跑完,结果落库。
     这正是"刷新页面不丢结果、钱不白花"的关键。
     """
     config = {"configurable": {"thread_id": thread_id}}
@@ -292,14 +292,14 @@ def _execute_run(run_id: str, thread_id: str, message: str) -> None:
             config=config,
             stream_mode="messages",
         ):
-            # 工具【执行完毕】:只报"哪个工具跑完了",不推工具返回的原文
+            # 工具执行完毕:只报"哪个工具跑完了",不推工具返回的原文
             # (那是给模型看的中间结果,推给用户会和正式回答重复)。
             if isinstance(chunk, ToolMessage):
                 runs.publish(run_id, {"type": "tool_end", "name": chunk.name or ""})
                 continue
             if not isinstance(chunk, AIMessageChunk):
                 continue
-            # 工具【开始调用】:让用户看见 agent 在做什么,而不是干等黑盒。
+            # 工具开始调用:让用户看见 agent 在做什么,而不是干等黑盒。
             for tc in chunk.tool_call_chunks or []:
                 name = tc.get("name")
                 if name and name not in announced:
@@ -322,14 +322,14 @@ def _execute_run(run_id: str, thread_id: str, message: str) -> None:
     runs.finish_run(run_id, answer=answer)
     runs.publish(run_id, {"type": "done"})
 
-    # 长期记忆写入放在【最后】,而且在 done 事件之后。
+    # 长期记忆写入放在最后,而且在 done 事件之后。
     #
     # 顺序是刻意的:用户已经拿到答案、连接已经可以关了,记忆抽取多花的
     # 一两秒完全不占他的等待时间。反过来放在 finish_run 之前的话,
     # 每个用户都要为一件他根本感知不到的事多等一会。
     #
     # 而且它整个包在 try 里:记忆是锦上添花,抽取或存储失败绝不能
-    # 让一次【已经成功】的运行看起来像失败了。
+    # 让一次已经成功的运行看起来像失败了。
     try:
         _remember_async(thread_id, message, answer, run_id)
     except Exception:
@@ -362,7 +362,7 @@ def _sse(event: dict) -> str:
 
 
 def _stream_run(run_id: str, from_start: bool):
-    """把某个 Run 的事件流转成 SSE。from_start=True 时【从头补发】(重连场景)。"""
+    """把某个 Run 的事件流转成 SSE。from_start=True 时从头补发(重连场景)。"""
 
     def gen():
         # 先把 run_id 告诉客户端 —— 前端存下它,断线后才能重连
@@ -385,7 +385,7 @@ def _stream_run(run_id: str, from_start: bool):
                 if ev.get("type") == "done":
                     return
 
-    # X-Accel-Buffering 是【响应头】:由后端贴在响应上、代理读它。
+    # X-Accel-Buffering 是响应头:由后端贴在响应上、代理读它。
     # 曾配反过 —— 写成 nginx 的 proxy_set_header(那是贴在"寄给后端的请求"上,
     # 后端看了也没用),流式一直只靠 proxy_buffering off 单锁在撑。
     return StreamingResponse(
@@ -491,7 +491,7 @@ def resume_run_stream(run_id: str, user_id: str = Depends(get_current_user)):
 # 为什么数据进 PG 而不是文件系统:见 persistence/models.DatasetRow 的说明 ——
 # 一句话是"不落盘就没有路径逃逸、没有清理、没有配额"。
 #
-# 为什么上传是【接口】而不是 agent 的工具:和 PDF 报告同一条 ——
+# 为什么上传是接口而不是 agent 的工具:和 PDF 报告同一条 ——
 # 工具要保持只读。让 agent 能接收并落盘文件,等于给提示注入开一扇门。
 
 
@@ -502,7 +502,7 @@ async def upload_dataset(
 ) -> dict:
     """上传一张实测数据表(CSV),返回数据集编号与概览。
 
-    体积闸门在【读进内存之前】就要判:先信任 Content-Length,读完再复核一次
+    体积闸门在读进内存之前就要判:先信任 Content-Length,读完再复核一次
     实际大小 —— 只信任声明的长度等于让客户端自己决定能塞多少进来。
     """
     from ruixue_agent.analysis import DatasetError, load_csv, summarize

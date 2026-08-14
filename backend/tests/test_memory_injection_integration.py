@@ -1,4 +1,4 @@
-"""长期记忆注入的【集成】测试:走真 agent、真 runtime,只把模型换成假的。
+"""长期记忆注入的集成测试:走真 agent、真 runtime,只把模型换成假的。
 
 为什么必须单独有这一层:
 `tests/test_memory.py` 里已经测过 `MemoryRecallMiddleware.before_model` 的逻辑,
@@ -39,7 +39,7 @@ from ruixue_agent.agents.middlewares import MEMORY_HEADER
 
 
 class _Fake(FakeMessagesListChatModel):
-    """永远直接给最终答案的假模型 —— 我们要看的是【进模型前】的上下文,不是它答什么。"""
+    """永远直接给最终答案的假模型 —— 我们要看的是进模型前的上下文,不是它答什么。"""
 
     def bind_tools(self, tools, **kw):
         return self
@@ -100,7 +100,7 @@ def test_memory_is_actually_injected_through_the_real_runtime(monkeypatch, _fake
 
 
 def test_user_id_comes_from_thread_prefix(monkeypatch, _fake_recall):
-    """召回必须按【解析出来的 user_id】查,查错人就是数据泄露。"""
+    """召回必须按解析出来的 user_id查,查错人就是数据泄露。"""
     agent = _agent_with_fake_model(monkeypatch)
     _run(agent, "alice:t1", "帮我算一下要买多少地膜。")
     assert _fake_recall == ["alice"], f"recall 收到的 user_id 不对:{_fake_recall}"
@@ -121,7 +121,7 @@ def test_memory_still_injects_when_a_skill_also_injects(monkeypatch, _fake_recal
 
     这里用一句同时命中技能触发词("配方")的提问,断言两者都在。
     """
-    # SKILL_HEADER 是带 {name} 占位符的【模板】,不是字面量 —— 用它自己的解析函数。
+    # SKILL_HEADER 是带 {name} 占位符的模板,不是字面量 —— 用它自己的解析函数。
     from ruixue_agent.skills.loader import injected_names
 
     agent = _agent_with_fake_model(monkeypatch)
@@ -137,7 +137,7 @@ def test_memory_still_injects_when_a_skill_also_injects(monkeypatch, _fake_recal
 def test_neither_is_injected_twice(monkeypatch, _fake_recall):
     """改成"往回找最后一条 HumanMessage"之后,同一轮里 before_model 可能被调多次。
 
-    去重判据必须扫【全部】消息;只扫 messages[:-1] 会漏掉刚注入的那条,
+    去重判据必须扫全部消息;只扫 messages[:-1] 会漏掉刚注入的那条,
     于是同一段内容塞两遍 —— 白花 token,还稀释注意力。
     """
     from ruixue_agent.skills.loader import injected_names

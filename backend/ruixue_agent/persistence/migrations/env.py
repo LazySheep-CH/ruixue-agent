@@ -1,7 +1,7 @@
 """Alembic 运行环境:告诉 Alembic「连哪个库」和「模型长什么样」。
 
 Alembic 干的事:
-    比对【models.py 里的模型】和【数据库里的实际表】,把差异生成一个 migration 文件。
+    比对models.py 里的模型和数据库里的实际表,把差异生成一个 migration 文件。
     每个 migration 有 revision(自己的版本号)和 down_revision(上一个版本号),
     串成一条链。数据库里有张 alembic_version 表记着「我现在在哪个版本」。
 
@@ -37,7 +37,7 @@ target_metadata = Base.metadata
 #
 # ## 不加这个会出什么事(2026-08-13 实测,差点酿成事故)
 #
-# LangGraph 的 PostgresSaver 会在【同一个库】里自己建四张 checkpoint 表
+# LangGraph 的 PostgresSaver 会在同一个库里自己建四张 checkpoint 表
 # (见 ruixue_agent/checkpointer.py 的 saver.setup())。它们不在 Base.metadata 里,
 # 于是 autogenerate 认为"库里有、模型里没有 → 应该删掉",生成的迁移里赫然写着:
 #
@@ -55,7 +55,7 @@ _FOREIGN_TABLE_PREFIXES = ("checkpoint",)
 
 
 def include_object(obj, name, type_, reflected, compare_to):
-    """只让 autogenerate 看见【我们自己的】表。
+    """只让 autogenerate 看见我们自己的表。
 
     reflected=True 表示"这个对象是从数据库里反射出来的";配合前缀判断,
     就能把别的组件建的表排除在比对之外 —— 既不会被误删,也不会被误建。
@@ -90,7 +90,7 @@ def run_migrations_online() -> None:
             target_metadata=target_metadata,
             include_object=include_object,
         )
-        # PG 的 DDL 是【事务性】的(MySQL 不是!):
+        # PG 的 DDL 是事务性的(MySQL 不是!):
         # 一个 migration 里改 5 张表,中间失败 → 全部回滚,不会留下半吊子状态。
         with context.begin_transaction():
             context.run_migrations()

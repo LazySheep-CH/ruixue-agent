@@ -5,7 +5,7 @@
   气候 → NASA POWER 在线 API(大陆实测 2s 可用,1981–近实时;失败则跳过,由默认值兜底)
   UV   → 由 NASA 的 UVA 按实证标定常数换算(见 schema.UV_PER_UVA_MJ)
 
-设计:土壤离线、气候在线 + 本地缓存。任一环节失败都【不抛异常】,只是少给几个特征,
+设计:土壤离线、气候在线 + 本地缓存。任一环节失败都不抛异常,只是少给几个特征,
 由预测层的默认值兜底 —— 保证"没网也能出结果,只是精度下降",并如实标注。
 """
 
@@ -151,7 +151,7 @@ def _fetch_power(lon: float, lat: float, start: str, end: str) -> dict | None:
 
 
 def get_soil(place: str) -> dict:
-    """【土壤】地点 → 土壤特征(纯离线查表,零网络)。
+    """土壤地点 → 土壤特征(纯离线查表,零网络)。
 
     土壤属性年际变化极慢,本地 SoilGrids 与在线 API 实测同值(pH 7.9 vs 7.8),
     故本地优先:更快、更稳,且在线偶有覆盖空洞(返回 null)。
@@ -170,10 +170,10 @@ def get_soil(place: str) -> dict:
 
 
 def get_climate(place: str, days: int = 90, end_date: str | None = None) -> dict:
-    """【气候】地点 + 天数 → 气候特征(NASA POWER 在线;失败则降级)。
+    """气候地点 + 天数 → 气候特征(NASA POWER 在线;失败则降级)。
 
     days:用于把日均量换算成累计量(降水、UV —— 模型要的是累计)。
-    end_date:'YYYYMMDD';默认取【去年同期结束】,保证 NASA 数据已就绪。
+    end_date:'YYYYMMDD';默认取去年同期结束,保证 NASA 数据已就绪。
     """
     loc = resolve_location(place)
     if loc is None:
@@ -219,7 +219,7 @@ def get_climate(place: str, days: int = 90, end_date: str | None = None) -> dict
 
 
 def get_environment(place: str, days: int = 90, end_date: str | None = None) -> dict:
-    """【组合】土壤 + 气候 → 一份可直接喂模型的环境特征。供按地点预测使用。"""
+    """组合土壤 + 气候 → 一份可直接喂模型的环境特征。供按地点预测使用。"""
     soil = get_soil(place)
     if not soil["ok"]:
         return soil

@@ -38,7 +38,7 @@ def load_id_map() -> dict[str, str]:
 
 
 def is_done(out_dir: Path, did: str) -> bool:
-    """已完成 = 该文档目录下【任意】子目录里有 content_list.json。
+    """已完成 = 该文档目录下任意子目录里有 content_list.json。
 
     注意:MinerU 的输出子目录名 = 它实际用的方法(auto/ 或 txt/ 或 ocr/)。
     不能写死 'auto':-m txt 模式的输出目录名不同,会被误判为未解析。

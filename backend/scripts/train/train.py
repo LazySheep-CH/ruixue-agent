@@ -96,7 +96,7 @@ def make_imputer() -> IterativeImputer:
     )
 
 
-# 插补很贵;5 个候选算法共用同一个插补器 → 用 joblib 缓存,让插补每折【只 fit 一次】,
+# 插补很贵;5 个候选算法共用同一个插补器 → 用 joblib 缓存,让插补每折只 fit 一次,
 # 之后 4 个算法直接复用缓存结果(约 5 倍加速),TS 这种大数据才跑得动。
 _MEMORY = joblib.Memory(location=str(ROOT / "models" / ".impute_cache"), verbose=0)
 
@@ -123,7 +123,7 @@ def clean(df: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, dict]:
             lambda v: fmap.get(int(v)) if pd.notna(v) else np.nan
         )
 
-    # 2. 丢弃【目标缺失】的行 —— 无标签无法监督训练(这不是"删好数据",是没法学)。
+    # 2. 丢弃目标缺失的行 —— 无标签无法监督训练(这不是"删好数据",是没法学)。
     #    但 impute_target 模式(论文法)保留这些行,稍后连目标一起填(见 main)。
     if not cfg.get("impute_target"):
         n = len(df)

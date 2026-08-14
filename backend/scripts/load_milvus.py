@@ -1,6 +1,6 @@
 """把 PG 里的子块 embed 后灌进 Milvus。
 
-数据从【PG】读,不是从 JSON 读 —— PG 才是 source of truth。
+数据从PG读,不是从 JSON 读 —— PG 才是 source of truth。
 JSON 是管道的中间缓存,可能和库里不一致。
 
 支持断点续传:挂了直接重跑,已灌的跳过(连 embed 都省了)。
@@ -43,7 +43,7 @@ def main() -> None:
 
     while offset < total:
         # 从 PG 读一批。join documents 拿 year/source ——
-        # 这两个字段要【复制】一份进 Milvus 做前过滤(它们属于索引,不是第二份数据源)
+        # 这两个字段要复制一份进 Milvus 做前过滤(它们属于索引,不是第二份数据源)
         with engine.connect() as conn:
             rows = (
                 conn.execute(

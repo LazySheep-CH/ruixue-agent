@@ -1,7 +1,7 @@
 """Retriever 的规格说明书 —— 组合 Milvus(给 ID)+ PG(给文本)。
 
-这些测试用【假的】Milvus 和 PG,不连真库。为什么:
-    Retriever 自己不查任何东西,它只【编排】。要测的是编排逻辑对不对,
+这些测试用假的Milvus 和 PG,不连真库。为什么:
+    Retriever 自己不查任何东西,它只编排。要测的是编排逻辑对不对,
     不是 Milvus 能不能搜。塞假的进去,就能精确控制"Milvus 返回了什么",
     然后检查 Retriever 怎么处理 —— 包括真库里很难造出来的情况
     (比如"3个子块全来自同一个父块")。
@@ -83,7 +83,7 @@ def rows():
 
 
 def test_returns_parent_text_not_child_text(rows):
-    """Small-to-Big 的全部意义:子块负责【被搜到】,父块负责【被返回】。
+    """Small-to-Big 的全部意义:子块负责被搜到,父块负责被返回。
 
     给 LLM 的必须是父块 —— 子块太碎,LLM 看不出上下文。
     """
@@ -97,7 +97,7 @@ def test_returns_parent_text_not_child_text(rows):
 
 
 def test_dedups_parents(rows):
-    """决策1):3 个子块可能都来自【同一个父块】。
+    """决策1):3 个子块可能都来自同一个父块。
 
     同一节里三句话都跟问题相关 —— 这恰恰说明那一节是对的。
     但不能把同一段父块文本重复三遍塞给 LLM:白烧 token,
@@ -111,7 +111,7 @@ def test_dedups_parents(rows):
 
 
 def test_dedup_preserves_similarity_order(rows):
-    """去重要【保序】—— 最相关的父块必须排最前。
+    """去重要保序—— 最相关的父块必须排最前。
 
     坑:用 set() 去重会打乱顺序(Python 的 set 不保证顺序)。
     dict.fromkeys() 才对:去重且保留首次出现的顺序。
@@ -127,12 +127,12 @@ def test_dedup_preserves_similarity_order(rows):
 
 
 def test_overfetches_children_to_fill_k_parents(rows):
-    """决策1)的答案:用户要 k 个【父块】,就得多搜几个子块。
+    """决策1)的答案:用户要 k 个父块,就得多搜几个子块。
 
     只搜 3 个子块 → 可能全来自 1 个父块 → 只还 1 个,用户要 3 个。
-    所以要【超取】:搜 k * fanout 个子块,去重后取前 k 个父块。
+    所以要超取:搜 k * fanout 个子块,去重后取前 k 个父块。
 
-    这个测试盯的是:Retriever 真的向 store 要了【更多】子块。
+    这个测试盯的是:Retriever 真的向 store 要了更多子块。
     """
     store = FakeStore([("P1_c0", 0.82), ("P1_c1", 0.71), ("P2_c0", 0.55)])
     r = Retriever(store, FakeRepo(rows))
@@ -157,7 +157,7 @@ def test_parent_score_is_best_child_score(rows):
     """决策2):父块自己没有分数 —— Milvus 给的是子块的。
 
     P1 命中两个子块(0.82 和 0.71),父块 P1 算几分?
-    取【最高】那个:一节里最相关的那句话,代表这一节的相关度。
+    取最高那个:一节里最相关的那句话,代表这一节的相关度。
     (取平均会惩罚长节 —— 长节里必然有很多不相关的句子,不公平)
     """
     store = FakeStore([("P1_c0", 0.82), ("P1_c1", 0.71)])
@@ -171,7 +171,7 @@ def test_parent_score_is_best_child_score(rows):
 
 
 def test_result_carries_provenance(rows):
-    """决策3):LLM 光有文本不够,还得知道【这话哪儿来的】。
+    """决策3):LLM 光有文本不够,还得知道这话哪儿来的。
 
     没有出处 = 用户没法核实 = 这个 RAG 不能用在生产上。
     地膜标准这种场景尤其:答错了是要赔钱的。
@@ -190,7 +190,7 @@ def test_result_carries_provenance(rows):
 
 
 def test_filters_pass_through_to_store(rows):
-    """year_min / source 要原样传给 Milvus —— 前过滤必须发生在向量检索【内部】。
+    """year_min / source 要原样传给 Milvus —— 前过滤必须发生在向量检索内部。
 
     如果 Retriever 自己在结果里筛(后过滤),就可能筛完剩 0 条。
     """
@@ -214,7 +214,7 @@ def test_empty_hits(rows):
 def test_missing_parent_is_skipped(rows):
     """索引指向了 PG 里不存在的块:跳过,不是崩。
 
-    真实场景:PG 里删了文档,Milvus 索引还没重建 —— 这是【正常的最终一致】。
+    真实场景:PG 里删了文档,Milvus 索引还没重建 —— 这是正常的最终一致。
     """
     store = FakeStore([("P1_c0", 0.82), ("幽灵子块", 0.7)])
     r = Retriever(store, FakeRepo(rows))

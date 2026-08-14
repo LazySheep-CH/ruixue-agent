@@ -69,16 +69,16 @@ BASELINE = Path("data/eval/baselines/retrieval_latest.json")
 def _save_baseline(rows: list[tuple[str, dict]], n_total: int, n_answerable: int) -> None:
     """把这次跑出的指标落成机器可读基线,供 README 一致性测试比对。
 
-    为什么【不直接改写 README】—— 这是我否掉的第一版设计:
+    为什么不直接改写 README—— 这是我否掉的第一版设计:
         脚本一旦有权改 README,任何一次 debug 跑(--fanout 1、跑一半 Ctrl-C、
-        改了检索参数试水)都会把线上口径的数字覆盖成假数,而且是【静默】覆盖。
+        改了检索参数试水)都会把线上口径的数字覆盖成假数,而且是静默覆盖。
         文档写错至少还看得见;被脚本写错则连"曾经是什么"都丢了。
 
-    改成:脚本只负责【如实记录自己跑出了什么】,README 由测试盯着(见
+    改成:脚本只负责如实记录自己跑出了什么,README 由测试盯着(见
     tests/test_readme_metrics.py)。两者不一致时测试红,由人决定是"文档过期了"
     还是"这次跑法不标准",而不是让机器替人做这个判断。
 
-    只在【标准口径】(--ab 且不叠加改写、不覆盖 fanout)时写,
+    只在标准口径(--ab 且不叠加改写、不覆盖 fanout)时写,
     非标准跑法不污染基线 —— 这正是上面担心的那个坑。
     """
     BASELINE.parent.mkdir(parents=True, exist_ok=True)
@@ -146,7 +146,7 @@ def main():
             rows.append((tag, m))
             print()
 
-        # 只有【标准口径】才更新基线:必须是 --ab、不叠改写、不覆盖 fanout。
+        # 只有标准口径才更新基线:必须是 --ab、不叠改写、不覆盖 fanout。
         # 任何非标准跑法都不许动基线,否则 README 一致性测试会被假数带跑偏。
         if args.ab and not args.rewrite and args.fanout is None:
             _save_baseline(rows, len(qs), rows[0][1]["n"])

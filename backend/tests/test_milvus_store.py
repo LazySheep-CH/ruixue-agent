@@ -1,8 +1,8 @@
 """MilvusVectorStore 的规格说明书。
 
-注意:和 numpy 版 VectorStore 的接口【不一样】,这是刻意的:
+注意:和 numpy 版 VectorStore 的接口不一样,这是刻意的:
     numpy 版手里握着全部东西(children/parents/vectors),所以 search() 能直接还你 Chunk。
-    Milvus 版【只有向量】,文本在 PG 里 —— 它根本没有 Chunk 可还。
+    Milvus 版只有向量,文本在 PG 里 —— 它根本没有 Chunk 可还。
     存储拆开了,接口就得跟着变。
 
     MilvusVectorStore.search()  →  [(chunk_id, 相似度), ...]     只管"哪些块像"
@@ -73,7 +73,7 @@ def test_ensure_collection_is_idempotent(store):
 
 
 def test_ensure_collection_self_heals_missing_index(store):
-    """【回归】表存在但【缺索引】时,ensure_collection 要能自愈补建。
+    """回归表存在但缺索引时,ensure_collection 要能自愈补建。
 
     踩过的坑:旧实现只判断 has_collection 就 return —— 若上次运行在建表与建索引
     之间中断,会留下"有表无索引"的残留,后续 search 报 `index not found`,
@@ -100,7 +100,7 @@ def test_ensure_collection_self_heals_missing_index(store):
 
 
 def test_schema_has_filter_fields(store):
-    """year/source 必须在 Milvus 里 —— 否则只能【后过滤】:
+    """year/source 必须在 Milvus 里 —— 否则只能后过滤:
     先搜 top10 再筛 2020 年后的,可能筛完剩 0 条。
     前过滤要求过滤字段在库里。
     """
@@ -120,7 +120,7 @@ def test_index_and_count(store):
 def test_index_is_idempotent(store):
     """22 万条灌到一半挂了必须能直接重跑。
 
-    Milvus【没有事务】—— 挂了不会回滚,会留下半截数据。
+    Milvus没有事务—— 挂了不会回滚,会留下半截数据。
     所以幂等在这里比在 PG 里更要命:它是唯一的恢复手段。
     """
     store.index(_rows())
@@ -158,7 +158,7 @@ def test_search_finds_semantically_closest(store):
 def test_search_returns_ids_not_chunks(store):
     """契约:只还 (chunk_id, 相似度)。
 
-    Milvus 里【没有文本】—— 文本是 PG 的活。
+    Milvus 里没有文本—— 文本是 PG 的活。
     这个测试锁住职责边界:哪天有人想往 Milvus 塞 text 字段,这里就该红。
     """
     store.index(_rows())
@@ -170,7 +170,7 @@ def test_search_prefilters_by_year(store):
     """前过滤:在 2020 年后的子集里搜,不是搜完再筛。
 
     区别看这里:PBAT 那条(2025)语义上最像"牌号",PLA 那条(2018)次之。
-    过滤 year>=2020 后,PLA 那条【根本不该出现】。
+    过滤 year>=2020 后,PLA 那条根本不该出现。
     """
     store.index(_rows())
     hits = store.search("牌号", k=5, year_min=2020)

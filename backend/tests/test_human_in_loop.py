@@ -1,6 +1,6 @@
 """人工批准(Human-in-the-Loop)测试:中间件装配 + API 中断/恢复 + 越权防线。
 
-绑定的场景是【成本控制】而非"防破坏"——本 agent 工具全为只读,
+绑定的场景是成本控制而非"防破坏"——本 agent 工具全为只读,
 但 delegate_to_expert 会启动子 agent(嵌套 LLM 循环,最贵的单次操作),
 让用户确认"要不要花这个钱"是真实需求。默认关闭,按需开启。
 """
@@ -31,7 +31,7 @@ def test_approval_middleware_off_by_default():
 def test_approval_middleware_inserted_when_enabled():
     names = [type(m).__name__ for m in _build_middleware("deepseek-v4-flash", True)]
     assert "HumanInTheLoopMiddleware" in names
-    # 位置:在重试【之后】、计时【之前】—— 等人批准的时间不该算进工具耗时
+    # 位置:在重试之后、计时之前—— 等人批准的时间不该算进工具耗时
     assert names.index("ModelRetryMiddleware") < names.index("HumanInTheLoopMiddleware")
     assert names.index("HumanInTheLoopMiddleware") < names.index("TimingLoggingMiddleware")
 
@@ -107,11 +107,11 @@ def test_resume_requires_auth(client):
 
 
 def test_resume_is_namespaced_per_user(client, monkeypatch):
-    """越权防线:B 用户的批准【动不了】A 用户会话里的待确认操作。
+    """越权防线:B 用户的批准动不了A 用户会话里的待确认操作。
 
     验证方式是"A 的状态没被改变",而不是"B 拿没拿到答案"——
     后者会被测试替身干扰(共享的假模型剧本会往下走,给 B 返回下一句台词,
-    那与 A 的会话无关,曾误判为越权)。真正的安全属性是【状态隔离】。
+    那与 A 的会话无关,曾误判为越权)。真正的安全属性是状态隔离。
     """
     client.post("/chat", headers=_H, json={"thread_id": "t1", "message": "帮我选配方"})
     monkeypatch.setattr(auth, "API_KEYS", {_KEY: "alice", "bob-key": "bob"})

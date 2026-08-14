@@ -5,7 +5,7 @@
 生成器被取消 → agent 半路停下 → 钱花了、结果没有、用户还得重问。
 
 改成:
-    创建 Run(PG) → 【后台任务】跑 agent(不绑请求生命周期)
+    创建 Run(PG) → 后台任务跑 agent(不绑请求生命周期)
                   → 事件写 Redis Stream → SSE 从 Stream 读并推给客户端
 
 客户端断了 agent 照跑完;重连时凭 run_id 把已产生的事件从头补发,
@@ -76,7 +76,7 @@ def publish(run_id: str, event: dict) -> None:
 
 
 def read_events(run_id: str, last_id: str = "0-0", block_ms: int = 15000):
-    """阻塞读取事件。从 last_id 之后开始 —— 传 "0-0" 就是【从头补发】(重连场景)。
+    """阻塞读取事件。从 last_id 之后开始 —— 传 "0-0" 就是从头补发(重连场景)。
 
     每次返回 (事件id, 事件内容) 列表;超时返回空列表(让调用方有机会发心跳)。
     """
@@ -108,7 +108,7 @@ def create_run(user_id: str, thread_id: str, question: str) -> str:
 
 
 def finish_run(run_id: str, *, answer: str | None = None, error: str | None = None) -> None:
-    """标记结束。error 必须是【脱敏】的短原因 —— 堆栈只进日志,不给用户看。"""
+    """标记结束。error 必须是脱敏的短原因 —— 堆栈只进日志,不给用户看。"""
     with Session(get_engine()) as s:
         s.execute(
             update(RunRow)
@@ -156,7 +156,7 @@ def reap_stale() -> int:
 # ── 后台执行 ──────────────────────────────────────────────────
 # 并发上限:同时最多跑几个 agent。
 #
-# 【必须有上限】—— 用裸 threading.Thread 是没有上限的:100 个用户同时提问就起
+# 必须有上限—— 用裸 threading.Thread 是没有上限的:100 个用户同时提问就起
 # 100 个线程,checkpointer 连接池(5 条)瞬间排满、100 个并发 LLM 调用把账单和
 # 上游限流一起打爆。有界线程池把压力挡在门口,而不是让系统雪崩。
 #
@@ -164,25 +164,25 @@ def reap_stale() -> int:
 # 1 条 checkpointer 连接 + 1 条业务连接,8 并发对应 ~16 条,PG 上限 100
 # 下即使 4 个 worker 也留有余量。可用 MAX_CONCURRENT_RUNS 调。
 #
-# 注意:注意:这个数【绑死在"模型走外部 API"这个前提上】。改成自部署推理服务
+# 注意:注意:这个数绑死在"模型走外部 API"这个前提上。改成自部署推理服务
 #    (vLLM / SGLang)后,上面的理由有一半不成立,必须重新推导:
 #
 #      · "打爆账单" —— 不存在了。自部署是固定成本,GPU 闲着也是烧钱,
 #        压低并发反而是浪费。
 #      · "打爆上游限流" —— 变成打爆自己的 GPU 队列,而 vLLM 用
-#        continuous batching,【并发越高吞吐越高】(到饱和点为止)。
+#        continuous batching,并发越高吞吐越高(到饱和点为止)。
 #        把 app 层死卡在 8 会让 GPU 大量闲置。
 #
 #    自部署下正确的形状是:让推理服务器自己排队(它比我们会调度),
 #    app 层的闸门从"限并发"改成"限排队深度 + 超时"。
 #    重试策略也要跟着改:API 的 503 是别人限流,退避重试是对的;
-#    自部署的排队超时是【自己容量不够】,重试只会让队列更长,该拒绝或扩容。
+#    自部署的排队超时是自己容量不够,重试只会让队列更长,该拒绝或扩容。
 #
 #    真正不变的约束只有一条:PG 的 max_connections(见 engine.py 的算式)。
 #
 # ── 压测实测记录(2026-08-10)────────────────────────────────
 #
-# 之前这里写着"这些数字从未压测验证过"。现在压过了,结论和当初的猜测【全都不一样】:
+# 之前这里写着"这些数字从未压测验证过"。现在压过了,结论和当初的猜测全都不一样:
 #
 #   闸门+DB 路径(不打模型)的饱和曲线,机器 64 核 / 容器限 4GB:
 #       worker=2   1.07 GiB   457 req/s   p99  110ms
@@ -191,14 +191,14 @@ def reap_stale() -> int:
 #       worker=16  4/4  GiB    42 req/s   p99 53428ms  ← 雪崩
 #
 # **瓶颈不是 CPU(64 核大量闲置),不是数据库(压测中 PG 只有 1 个 active 连接、
-#   32 个 idle),是【内存】** —— 每个 worker 要各自加载一份嵌入模型 + 三个树模型,
+#   32 个 idle),是内存** —— 每个 worker 要各自加载一份嵌入模型 + 三个树模型,
 #   实测约 520MB/worker(线性)。4GB 上限 → 最多 ~7 个。
 #
 # 这条对 AI 服务是普适的、和普通 Web 服务不一样的经验:
 #   worker 数不能按 CPU 核数拍,它是内存约束,不是 CPU 约束。
 #   照"核数×2"配 128 个 worker,会在启动阶段就把机器打死。
 #
-# 想再往上扩,正解不是加内存,是【把嵌入模型抽成独立服务】——
+# 想再往上扩,正解不是加内存,是把嵌入模型抽成独立服务——
 # 让所有 worker 共享一份,而不是每个进程各存一份。那之后 worker 数才回到 CPU 约束。
 #
 # 复现:uv run python scripts/ops/loadtest.py --mode gate --concurrency 80 --requests 2400
@@ -209,12 +209,12 @@ MAX_QUEUED_RUNS = int(os.getenv("MAX_QUEUED_RUNS", "16"))
 
 # 收到停止信号后,最多等在途运行多久(秒)。
 #
-# 上界由【容器编排给的宽限期】决定:docker stop 默认 10s 后 SIGKILL,
+# 上界由容器编排给的宽限期决定:docker stop 默认 10s 后 SIGKILL,
 # compose 里已把它调到 60s(stop_grace_period)。这里取 45s,留 15s 给
 # 收尾落库 —— 等超过宽限期毫无意义,那时进程已经被强杀了。
 SHUTDOWN_DRAIN_SECONDS = int(os.getenv("SHUTDOWN_DRAIN_SECONDS", "45"))
 
-# 线程池【惰性创建】而不是模块加载时就建。
+# 线程池惰性创建而不是模块加载时就建。
 # 理由:shutdown() 会把它彻底关掉,关掉的池不能再 submit。惰性创建让"停机后
 # 再启动"这件事天然成立 —— 测试要反复走停机流程,而生产上万一有人写了
 # 重启逻辑也不会拿到一个死池。
@@ -222,7 +222,7 @@ _executor: ThreadPoolExecutor | None = None
 _inflight = 0  # 已提交但未完成的运行数(排队中 + 执行中)
 _inflight_lock = threading.Lock()
 _shutting_down = False
-# 本进程当前负责的 run_id。停机时要能把没跑完的这些【立刻】标记失败 ——
+# 本进程当前负责的 run_id。停机时要能把没跑完的这些立刻标记失败 ——
 # 否则它们会在库里挂着 running,用户对着转圈等到 15 分钟后才被 reap_stale 清理。
 _owned: set[str] = set()
 
@@ -259,10 +259,10 @@ def start_background(run_id: str, target, *args) -> None:
     def _release(_future):
         """名额归还。挂在 future 的完成回调上,而不是写在任务体的 finally 里。
 
-        为什么:停机时 cancel_futures=True 会取消【还没开始跑】的任务 ——
+        为什么:停机时 cancel_futures=True 会取消还没开始跑的任务 ——
         那些任务体一次都不执行,写在 finally 里的归还永远不会发生,计数就永久
         泄漏了:系统明明空闲,却一直以为满载,之后所有请求被 503 挡在门外。
-        done_callback 对【正常完成 / 抛异常 / 被取消】三种结局都会触发。
+        done_callback 对正常完成 / 抛异常 / 被取消三种结局都会触发。
         """
         global _inflight
         with _inflight_lock:
@@ -281,7 +281,7 @@ def shutdown(timeout: int = SHUTDOWN_DRAIN_SECONDS) -> int:
     """停机流程:停收新活 → 等在途跑完 → 剩下的立刻标记失败。返回被标记失败的条数。
 
     不做这件事会怎样:
-    每次重新部署都会发 SIGTERM。uvicorn 只等【HTTP 请求】排空,而 agent 跑在
+    每次重新部署都会发 SIGTERM。uvicorn 只等HTTP 请求排空,而 agent 跑在
     后台线程里、不绑任何 HTTP 请求 —— 于是线程被直接砍掉:
         · 用户的答案没了,而模型的钱已经花掉了
         · 库里那条记录还写着 running,用户对着转圈等到下次启动 reap_stale
