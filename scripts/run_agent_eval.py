@@ -38,6 +38,8 @@ from ruixue_agent.eval import report as rp
 from ruixue_agent.eval.runner import build_eval_agent, run_all
 from ruixue_agent.eval.schema import load_cases
 
+# 默认跑能力评测集。安全评测集(security_evalset.jsonl)是【另一把尺子】——
+# 主集冻结不动,安全场景需要持续扩充,混在一起会让基线不断失效。
 EVAL = Path("data/eval/agent_evalset.jsonl")
 RUNS = Path("runs")
 
@@ -156,6 +158,11 @@ def main() -> int:
         nargs="+",
         help="基线结果文件;传多份则按【多数票共识】对比(强烈建议,单轮基线自己就抖)",
     )
+    ap.add_argument(
+        "--evalset",
+        default=str(EVAL),
+        help="评测集路径。安全评测:data/eval/security_evalset.jsonl",
+    )
     ap.add_argument("--only", help="只跑某个类别,如 injection")
     ap.add_argument("--model", default="deepseek-v4-pro")
     ap.add_argument("--dry-run", action="store_true", help="只校验评测集,不调模型")
@@ -167,7 +174,7 @@ def main() -> int:
     )
     args = ap.parse_args()
 
-    cases = load_cases(EVAL, known_tools=_known_tools())
+    cases = load_cases(args.evalset, known_tools=_known_tools())
     if args.rescore:
         return _rescore(cases, args.rescore, args.baseline)
     if args.only:

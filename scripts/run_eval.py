@@ -63,6 +63,41 @@ def _print(tag, m, per, na, dt):
         print("  拒答:检索永返回结果,拒答是生成层职责(见优化记录),此处不计入 Recall")
 
 
+BASELINE = Path("data/eval/baselines/retrieval_latest.json")
+
+
+def _save_baseline(rows: list[tuple[str, dict]], n_total: int, n_answerable: int) -> None:
+    """把这次跑出的指标落成机器可读基线,供 README 一致性测试比对。
+
+    为什么【不直接改写 README】—— 这是我否掉的第一版设计:
+        脚本一旦有权改 README,任何一次 debug 跑(--fanout 1、跑一半 Ctrl-C、
+        改了检索参数试水)都会把线上口径的数字覆盖成假数,而且是【静默】覆盖。
+        文档写错至少还看得见;被脚本写错则连"曾经是什么"都丢了。
+
+    改成:脚本只负责【如实记录自己跑出了什么】,README 由测试盯着(见
+    tests/test_readme_metrics.py)。两者不一致时测试红,由人决定是"文档过期了"
+    还是"这次跑法不标准",而不是让机器替人做这个判断。
+
+    只在【标准口径】(--ab 且不叠加改写、不覆盖 fanout)时写,
+    非标准跑法不污染基线 —— 这正是上面担心的那个坑。
+    """
+    BASELINE.parent.mkdir(parents=True, exist_ok=True)
+    BASELINE.write_text(
+        json.dumps(
+            {
+                "evalset": str(EVAL),
+                "n_total": n_total,
+                "n_answerable": n_answerable,
+                "layers": {tag: {k: round(v, 4) for k, v in m.items()} for tag, m in rows},
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    print(f"基线已写入 {BASELINE}(README 指标表由 tests/test_readme_metrics.py 盯着)")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--ab", action="store_true", help="逐层对比:纯向量 / +BM25 / +rerank")
@@ -103,11 +138,18 @@ def main():
             ]
 
         configs[0][1].search("预热", k=1)
+        rows = []
         for tag, r in configs:
             t0 = time.time()
             m, per, na = run(r, qs)
             _print(tag, m, per, na, (time.time() - t0) / max(m["n"], 1) * 1000)
+            rows.append((tag, m))
             print()
+
+        # 只有【标准口径】才更新基线:必须是 --ab、不叠改写、不覆盖 fanout。
+        # 任何非标准跑法都不许动基线,否则 README 一致性测试会被假数带跑偏。
+        if args.ab and not args.rewrite and args.fanout is None:
+            _save_baseline(rows, len(qs), rows[0][1]["n"])
 
 
 if __name__ == "__main__":
