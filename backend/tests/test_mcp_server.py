@@ -18,6 +18,26 @@ from fastapi.testclient import TestClient
 
 from ruixue_app import mcp_server
 
+
+def _deps_up() -> bool:
+    """这批测试要走真实的 app lifespan(MCP 会话管理器只在 lifespan 里启动),
+    而 lifespan 会构建真 agent —— PG checkpointer 在此连接数据库。
+    CI 没有 PG,不守卫的话每个用例都会卡到连接池超时(实测拖满 3 分钟)再失败。
+    """
+    try:
+        from sqlalchemy import text
+
+        from ruixue_agent.persistence.engine import get_engine
+
+        with get_engine().connect() as c:
+            c.execute(text("SELECT 1"))
+        return True
+    except Exception:
+        return False
+
+
+pytestmark = pytest.mark.skipif(not _deps_up(), reason="需要 PostgreSQL(app lifespan 构建真 agent)")
+
 # MCP streamable-http 要求客户端同时接受 JSON 与 SSE
 _MCP_HEADERS = {
     "Content-Type": "application/json",
