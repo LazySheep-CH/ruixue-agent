@@ -1,14 +1,14 @@
-"""子智能体(多 Agent 协作):把专项子任务【委派】给"专家"子 agent。
+"""子智能体(多 Agent 协作):把专项子任务委派给"专家"子 agent。
 
 核心思想(业界通行做法):子 agent = 一个工具。
 主 agent(项目经理)不亲自干细活,而是通过一个 delegate 工具,把自包含的子任务
-派给某位专家(子 agent);专家用自己的【窄工具集 + 窄提示】独立完成,只把结论回给主 agent。
+派给某位专家(子 agent);专家用自己的窄工具集 + 窄提示独立完成,只把结论回给主 agent。
 
-为什么这样设计(四维):
+这样拆的理由:
 - 架构:子 agent 复用 create_agent,不引入新框架;"专家=工具"契合已有的工具注册表模式。
 - 扩展:加一位专家 = 往 _EXPERTS 加一条,别处不动(开闭原则)。
 - 安全:最小权限 —— 每位专家只拿它该有的工具(计算专家碰不到 RAG);子任务上下文隔离。
-- 成本/防递归:专家用便宜模型(flash);且专家工具集【不含】delegate,故专家不能再派活,
+- 成本/防递归:专家用便宜模型(flash);且专家工具集不含delegate,故专家不能再派活,
   从根上杜绝"无限递归派活"。
 """
 
@@ -43,9 +43,9 @@ from ruixue_agent.tools.rag import search_knowledge
 logger = logging.getLogger("ruixue.subagent")
 
 # ── 专家注册表:专家名 -> {描述, 工具集, 系统提示}。加专家 = 加一条 ──────────
-# 注意:这里【不放】delegate 工具进任何专家 —— 专家不能再派活(防递归)。
+# 注意:这里不放delegate 工具进任何专家 —— 专家不能再派活(防递归)。
 #
-# description 字段不是注释,是【给主 agent 看的路由依据】:它会被拼进
+# description 字段不是注释,是给主 agent 看的路由依据:它会被拼进
 # delegate_to_expert 的工具描述(见文件末尾)。写清楚"什么时候派给它",
 # 主 agent 才派得准。
 _EXPERTS: dict[str, dict] = {
@@ -83,11 +83,11 @@ _EXPERTS: dict[str, dict] = {
             "地里已经出问题时派它:膜提前破裂/降解太快或太慢/残留清不掉/保墒不达预期。"
             "特征是用户描述的是【已发生的异常现象】,要逐项排查原因,而不是选型或查资料"
         ),
-        # 诊断的第一步永远是"这个配方在当地【本该】表现如何"——没有这个基准,
+        # 诊断的第一步永远是"这个配方在当地本该表现如何"——没有这个基准,
         # 后面无从判断是"膜不对"还是"预期不对"。所以 predict_by_location 是核心工具。
-        # 不给 screen_film_recipes:诊断是【找原因】,不是【重新选型】;
+        # 不给 screen_film_recipes:诊断是找原因,不是重新选型;
         # 混进来会让它跳过排查直接推荐新配方,而用户想知道的是"这次为什么坏了"。
-        # get_weather_forecast 给的是【风速】—— 这一项此前完全没有,
+        # get_weather_forecast 给的是风速—— 这一项此前完全没有,
         # 而风是揭膜/撕裂的主要外力。实测第一版诊断只能写"工具未返回风速数据,
         # 大风揭膜无法在此验证,需用户自查",排查在这一支上直接断掉。
         "tools": [
@@ -167,11 +167,11 @@ def _build_expert(name: str, model_name: str = "deepseek-v4-flash"):
     """按注册表造一个专家子 agent。构建一次,之后查缓存复用。
 
     为什么要缓存:agent 图的编译 + 模型客户端创建,实测每次约 127ms ——
-    没缓存时【每次派活都重付一遍】。deepagents 的 SubAgentMiddleware 也是
+    没缓存时每次派活都重付一遍。deepagents 的 SubAgentMiddleware 也是
     同一做法:在中间件构造时把所有子 agent 编译好,task 工具只查字典。
 
     复用实例安全吗?安全,关键在下面这条:
-    刻意【不传 checkpointer】:agent 图本身是无状态的(状态全在 invoke 传入的
+    刻意不传 checkpointer:agent 图本身是无状态的(状态全在 invoke 传入的
     messages 里),没有 checkpointer 就没有任何跨调用的残留 —— 这正是
     "上下文隔离"(专家不背主对话的历史包袱,主 agent 也不被专家的中间步骤污染)。
     同一个图对象被并行调用也互不干扰,LangGraph 对每次 invoke 单独跑。
@@ -188,12 +188,12 @@ def _build_expert(name: str, model_name: str = "deepseek-v4-flash"):
 #
 # ## 不做这件事会怎样(实测发现的真缺陷)
 #
-# delegate_to_expert 原本只返回一个字符串,子 agent 的消息【从不进入父状态】。
+# delegate_to_expert 原本只返回一个字符串,子 agent 的消息从不进入父状态。
 # 后果比"少个 id"严重得多:
 #
-#   · 成本漏算 —— 我们的 Trace 是从【父 agent 的消息】累加 token 的,
+#   · 成本漏算 —— 我们的 Trace 是从父 agent 的消息累加 token 的,
 #     子 agent 烧掉的 token 一分钱都没统计进去。评测报的 "5595 tokens/题"
-#     只要发生委派就是【偏低的】,而我们还拿它做版本成本对比。
+#     只要发生委派就是偏低的,而我们还拿它做版本成本对比。
 #   · 内部全黑箱 —— 评测只看见一次 delegate_to_expert,专家在里面调了几次
 #     什么工具、转了几圈、慢在哪,全都看不到。排查时无从下手。
 #
@@ -203,11 +203,11 @@ def _build_expert(name: str, model_name: str = "deepseek-v4-flash"):
 # ## 我们的做法:ContextVar 收集器
 #
 # 不引入 Command(那要改父状态 schema、牵动整条装配链),而是用一个
-# 【运行域的收集器】:调用方在跑 agent 前放一个空列表进 ContextVar,
+# 运行域的收集器:调用方在跑 agent 前放一个空列表进 ContextVar,
 # 子 agent 跑完把自己的账单 append 进去,跑完调用方取走。
 #
 # 为什么可行(已实测):工具跑在线程池里,但 ContextVar 会随上下文复制传进去;
-# 而列表是【按引用共享】的 —— 复制的是变量映射,不是列表本身,
+# 而列表是按引用共享的 —— 复制的是变量映射,不是列表本身,
 # 所以工具线程里的 append 主线程看得见。
 # 并行委派也安全:CPython 里 list.append 是原子的。
 _collector: ContextVar[list | None] = ContextVar("subagent_runs", default=None)
@@ -314,7 +314,7 @@ def delegate_to_expert(expert: str, task: str) -> str:
     return msgs[-1].content if msgs else ""
 
 
-# 工具描述【从注册表生成】,不手写。
+# 工具描述从注册表生成,不手写。
 #
 # 为什么必须这样:工具描述就是主 agent 的路由依据 —— 派不派活、派给谁,
 # 全凭这段文字。手写清单一定会和注册表跑偏:实测就发生过,注册表里有两位专家,

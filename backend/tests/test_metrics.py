@@ -14,7 +14,7 @@ def test_recall_hit_and_miss():
 
 
 def test_recall_any_gold_counts(rows=None):
-    """多标准答案:命中【任意一个】就算数。
+    """多标准答案:命中任意一个就算数。
 
     这正是 pooling 要修的那个 bug:早期每题只标一个 gold,
     检索器返回了库里另一段同样能回答的块,却被判 0 分。
@@ -33,7 +33,7 @@ def test_reciprocal_rank_is_position_sensitive():
 
 
 def test_reciprocal_rank_takes_first_gold():
-    """多个标准答案时,按【最靠前】那个算 —— LLM 只要够到一段就能答。"""
+    """多个标准答案时,按最靠前那个算 —— LLM 只要够到一段就能答。"""
     assert reciprocal_rank(["x", "b", "a"], {"a", "b"}) == 0.5  # b 在第2,不是 a 的第3
 
 

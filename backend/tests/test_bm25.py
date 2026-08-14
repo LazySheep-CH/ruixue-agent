@@ -59,7 +59,7 @@ def test_keeps_only_rare_terms():
 
 
 def test_terms_not_in_df_are_rarest():
-    """词频表里【没有】的词 = df 0 = 最罕见,必须保留。
+    """词频表里没有的词 = df 0 = 最罕见,必须保留。
 
     注意:仅统计 df=0 的词会漏掉低频但存在的词,导致误判"查询里没有罕见词"。
     索引里没有的词恰恰是最该用的。

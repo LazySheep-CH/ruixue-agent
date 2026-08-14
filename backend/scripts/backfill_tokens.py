@@ -1,7 +1,7 @@
 """回填 chunks.text_tokens —— 给已有的 26 万块补上 jieba 分词。
 
 为什么是独立脚本而不是写在 migration 里:
-    migration 管【结构】,数据迁移管【内容】。26 万行的回填跑在 migration 里,
+    migration 管结构,数据迁移管内容。26 万行的回填跑在 migration 里,
     中途挂了整个 migration 事务回滚 —— 前面跑的全白费。
     独立脚本可以分批提交、可以断点续传、可以重跑。
 
@@ -96,7 +96,7 @@ def main() -> None:
         print(f"  有分词的: {n_tok:,}")
         print(f"  有 tsv 的: {n_tsv:,}   ← 该和上面一样(触发器自动生成的)")
 
-        # 真查一把 —— 这是 0001 时【完全查不出来】的
+        # 真查一把 —— 这是 0001 时完全查不出来的
         for q in ("地膜 厚度", "PBAT", "全生物降解地膜"):
             hit = conn.execute(
                 text("""

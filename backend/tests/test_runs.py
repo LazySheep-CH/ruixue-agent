@@ -246,7 +246,7 @@ def test_shutdown_waits_for_inflight_then_returns_zero(drained, monkeypatch):
 
 
 def test_shutdown_marks_stragglers_failed_immediately(drained, monkeypatch):
-    """超过宽限期还没完的,必须【立刻】落库为失败。
+    """超过宽限期还没完的,必须立刻落库为失败。
 
     不做的话它在库里挂着 running,用户要对着转圈等到 15 分钟后 reap_stale 才知道。
     宁可明确说"服务重启了,请重发",也不要让人等一个永远不回来的答案。

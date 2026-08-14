@@ -1,4 +1,4 @@
-"""用量配额:限制每个用户【每天能用多少】,护住 API 账单。
+"""用量配额:限制每个用户每天能用多少,护住 API 账单。
 
 为什么限流不够:
 限流(20 次/分钟)管的是频率,不管总量。一个用户老老实实按 20/分钟 调,
@@ -74,7 +74,7 @@ def consume(user_id: str) -> tuple[bool, int]:
 def enforce_quota(user_id: str = Depends(get_current_user)) -> str:
     """FastAPI 依赖:检查并消耗配额,超限返回 429。放行时返回 user_id。
 
-    放在 /chat 这类【会花钱】的端点上;查询类端点(健康检查、查土壤)不必。
+    放在 /chat 这类会花钱的端点上;查询类端点(健康检查、查土壤)不必。
     """
     allowed, used = consume(user_id)
     if not allowed:

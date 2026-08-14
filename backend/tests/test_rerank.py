@@ -1,7 +1,7 @@
 """rerank 的测试。
 
 模型部分不测(那是 sentence-transformers 的事,且慢)。
-测的是【编排逻辑】:Reranker 类怎么处理打分结果,Retriever 怎么用它重排。
+测的是编排逻辑:Reranker 类怎么处理打分结果,Retriever 怎么用它重排。
 用假模型注入,精确控制"模型给了什么分",检查我们的代码怎么反应。
 """
 
@@ -115,7 +115,7 @@ def test_no_reranker_keeps_retrieval_order(rows):
 
 
 def test_rerank_over_fetches_before_truncate(rows):
-    """rerank 必须在【截断前】拿到超取的候选,否则无米下锅。
+    """rerank 必须在截断前拿到超取的候选,否则无米下锅。
 
     要 k=1,但检索超取了 2 个候选。如果先截到 1 再 rerank,P2 就没了。
     正确行为:rerank 看到 2 个,把 P2 顶上来,再截到 1。

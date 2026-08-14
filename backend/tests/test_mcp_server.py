@@ -4,7 +4,7 @@
 
 - 默认必须关闭 —— 一个没人用的入口默认开着,是白送的攻击面。
 - 无凭证必须 401 —— 子应用不吃 FastAPI 的 Depends,鉴权写在 ASGI 层。
-  这条要是漏了,表现是【接口一切正常,只是谁都能调】,不会有任何报错。
+  这条要是漏了,表现是接口一切正常,只是谁都能调,不会有任何报错。
 - 白名单必须真的生效 —— 配了只暴露 A,结果 B 也出去了,等于配置形同虚设。
 - 配额超限要返回人话而不是抛异常 —— 对方的 agent 才能转述给它的用户。
 """
@@ -190,7 +190,7 @@ def test_within_quota_passes_through(monkeypatch):
 
 
 def test_caller_identity_is_used_for_metering(monkeypatch):
-    """计费必须记在【解析出来的身份】上,不能记在调用方自己声称的身份上。"""
+    """计费必须记在解析出来的身份上,不能记在调用方自己声称的身份上。"""
     seen = []
     monkeypatch.setattr(mcp_server.quota, "consume", lambda uid: (seen.append(uid), (True, 1))[1])
     token = mcp_server._caller.set("alice")

@@ -2,7 +2,7 @@
 
 独立成两个工具(而非藏在预测里),因为它们本身就是可独立回答的问题
 ("这地方土壤怎么样""今年雨水多吗"),且 agent 可自由组合使用。
-两者都是【确定性】能力(查表 / 调 API,不需要推理)→ 是 tool 而非 subagent。
+两者都是确定性能力(查表 / 调 API,不需要推理)→ 是 tool 而非 subagent。
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ CLIMATE_LABELS = {
 
 @tool
 def get_soil_info(place: str) -> str:
-    """查询某地的【土壤】情况(pH、有机碳、质地、容重等)。
+    """查询某地的土壤情况(pH、有机碳、质地、容重等)。
 
     数据源:SoilGrids 0-5cm 表层,2898 个县离线表(零网络、秒回)。
     参数 place:县/区级或市级地名,如"尉犁县""新疆尉犁""南京"。
@@ -58,7 +58,7 @@ def get_soil_info(place: str) -> str:
 
 @tool
 def get_climate_info(place: str, days: int = 90) -> str:
-    """查询某地某时段的【气候】情况(气温、降水、辐射、紫外、湿度)。
+    """查询某地某时段的气候情况(气温、降水、辐射、紫外、湿度)。
 
     数据源:NASA POWER 日尺度实况(1981–近实时);降水/紫外按天数换算成累计量。
     参数:place 县/区级或市级地名;days 关注的天数(默认 90,如一个种植季)。
@@ -75,17 +75,17 @@ def get_climate_info(place: str, days: int = 90) -> str:
 
 @tool
 def get_weather_forecast(place: str, days: int = 7) -> str:
-    """查询某地【未来几天的天气预报】(气温、降水、太阳辐射、紫外、风速)。
+    """查询某地未来几天的天气预报(气温、降水、太阳辐射、紫外、风速)。
 
     数据源:Open-Meteo 预报,最多 16 天。
     参数:place 县/区级或市级地名;days 预报天数(默认 7,上限 16)。
 
     适用:用户问"下周适合铺膜吗""这几天会不会下雨""要刮大风吗"——
-    任何关于【未来】的天气问题。
+    任何关于未来的天气问题。
     不适用:问"这地方常年气候怎么样""过去一季的降水" —— 那是
     get_climate_info(历史实况),两者数据源和含义都不同,不要混用。
 
-    注意:返回的是【预报】不是实况,存在不确定性,回答时必须如实说明。
+    注意:返回的是预报不是实况,存在不确定性,回答时必须如实说明。
     """
     from ruixue_agent.predictors.forecast import format_forecast, get_forecast
 

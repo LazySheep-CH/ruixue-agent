@@ -23,7 +23,7 @@ request_id_var: ContextVar[str] = ContextVar("request_id", default="-")
 class RequestIdLogFilter(logging.Filter):
     """在每条日志记录上盖一个 request_id 字段,供格式串 %(request_id)s 使用。
 
-    logging.Filter 本职是"决定这条日志放不放行",但也常被借用来【给日志加字段】——
+    logging.Filter 本职是"决定这条日志放不放行",但也常被借用来给日志加字段——
     我们就是借它,在每条日志被输出前,把当前请求的编号塞进去。
     """
 
@@ -52,7 +52,7 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
     """每个 HTTP 请求进来时:确定一个 request_id,全程带着,并回写响应头。
 
     中间件(middleware)在这里 = "每个请求进出都要穿过的关卡"。
-    和 agent 的中间件是同一个思想,只是这层套在【HTTP 请求】外面。
+    和 agent 的中间件是同一个思想,只是这层套在HTTP 请求外面。
     """
 
     async def dispatch(self, request: Request, call_next):

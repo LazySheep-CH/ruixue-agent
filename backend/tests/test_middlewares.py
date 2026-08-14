@@ -1,7 +1,7 @@
-"""中间件单元测试:用【测试替身】隔离测中间件自己的逻辑。
+"""中间件单元测试:用测试替身隔离测中间件自己的逻辑。
 
-关键手法:不启动真 agent、不连 LLM/docker,而是给中间件一个【假的 request】
-和【假的 handler】。这样测试快(毫秒级)、稳、可进 CI —— 测的是"中间件干了什么",
+关键手法:不启动真 agent、不连 LLM/docker,而是给中间件一个假的 request
+和假的 handler。这样测试快(毫秒级)、稳、可进 CI —— 测的是"中间件干了什么",
 不是 LLM 或工具本身。这正是"单元测试测你的逻辑,不测框架和第三方"。
 """
 
@@ -50,7 +50,7 @@ def test_timing_logs_tool_name_and_duration(caplog):
 
 
 def test_error_handling_passes_result_through_on_success():
-    """没出错时应【透明】—— 正常返回工具结果,不多管闲事。"""
+    """没出错时应透明—— 正常返回工具结果,不多管闲事。"""
     mw = ToolErrorHandlingMiddleware()
     result = mw.wrap_tool_call(_FakeReq(), lambda req: "正常结果")
     assert result == "正常结果"
@@ -72,7 +72,7 @@ def test_error_handling_catches_exception_and_returns_message():
 
 
 def test_error_handling_does_not_leak_raw_detail():
-    """【安全】原始错误细节绝不能进返回给模型的内容里 —— 只放行异常【类型名】。
+    """安全原始错误细节绝不能进返回给模型的内容里 —— 只放行异常类型名。
 
     动机:工具的异常文字里常带内网 IP、数据库地址、用户名等敏感信息。
     它会进大模型上下文,可能被复述给用户 = 泄露内部结构。

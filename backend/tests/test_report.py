@@ -40,7 +40,7 @@ def _text_of(pdf: bytes) -> str:
 
 
 def test_pdf_is_generated_and_text_is_extractable():
-    """文字必须是【真文字】不是图片 —— 用户要能复制、能搜。"""
+    """文字必须是真文字不是图片 —— 用户要能复制、能搜。"""
     pdf = render_pdf(_data())
     assert pdf.startswith(b"%PDF")
     text = _text_of(pdf)
@@ -156,7 +156,7 @@ def _rendered_text(md: str) -> str:
     """渲染一段 Markdown 并取回纸面文字。
 
     注意:别叫 _text_of —— 本文件上面已有同名函数(参数是 PDF 字节)。
-      Python 取最后一个定义,重名会让【上面所有测试】把 PDF 字节当 Markdown 传,
+      Python 取最后一个定义,重名会让上面所有测试把 PDF 字节当 Markdown 传,
       报一个和真实原因毫不相干的 TypeError。踩过一次。
     """
     import fitz
@@ -194,7 +194,7 @@ def test_ragged_table_does_not_crash():
 
 
 def test_overlong_cell_is_truncated_not_drawn_off_page():
-    """超宽单元格必须截断。画出纸外【不会报错】,只是看不见 —— 最坏的一类失败。"""
+    """超宽单元格必须截断。画出纸外不会报错,只是看不见 —— 最坏的一类失败。"""
     import fitz
 
     long_cell = "非常长的配方说明" * 40
@@ -206,7 +206,7 @@ def test_overlong_cell_is_truncated_not_drawn_off_page():
         assert block[2] <= 545, f"有内容画到了纸外:x2={block[2]}"
 
 
-# ── 下载接口:归属校验是【安全边界】,不是功能 ──────────────────
+# ── 下载接口:归属校验是安全边界,不是功能 ──────────────────
 #
 # 上面全是渲染层的测试(纯函数、不连库)。但这份报告是通过 HTTP 下载的,
 # 而猜到别人的 run_id 就能下载别人的报告 = 数据泄露。

@@ -44,7 +44,7 @@ def test_normalization_variants_hit_same_entry(variant):
     assert cache.get(variant, KB) == "答案A"
 
 
-# ── 安全底线:意思不同的问题【绝不能】互相命中 ────────────────
+# ── 安全底线:意思不同的问题绝不能互相命中 ────────────────
 @pytest.mark.parametrize(
     "q1,q2",
     [

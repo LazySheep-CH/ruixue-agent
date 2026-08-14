@@ -12,7 +12,7 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-# 注意:autogenerate 会写 postgresql.JSONB 却【不加这行导入】——
+# 注意:autogenerate 会写 postgresql.JSONB 却不加这行导入——
 #   不补上,迁移一跑就 NameError。JSONB 列的迁移每次都要检查这条。
 from sqlalchemy.dialects import postgresql
 

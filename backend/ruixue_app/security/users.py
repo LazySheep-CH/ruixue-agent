@@ -46,7 +46,7 @@ def create_user(username: str, password: str) -> UserRow:
 def authenticate(username: str, password: str) -> UserRow:
     """登录校验。
 
-    【安全】用户名不存在与密码错误返回【同一句提示】—— 否则攻击者能靠不同的
+    安全用户名不存在与密码错误返回同一句提示—— 否则攻击者能靠不同的
     错误信息枚举出哪些用户名是存在的(用户枚举漏洞)。
     """
     with _session() as s:

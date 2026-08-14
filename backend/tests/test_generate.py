@@ -1,4 +1,4 @@
-"""生成的测试。LLM 不真调(慢、要联网),测的是【编排 + grounding 的骨架】。"""
+"""生成的测试。LLM 不真调(慢、要联网),测的是编排 + grounding 的骨架。"""
 
 from __future__ import annotations
 
@@ -126,7 +126,7 @@ def test_missing_year_says_so_instead_of_omitting():
 
 
 def test_generation_fingerprint_changes_when_rules_change(monkeypatch):
-    """缓存键必须覆盖【一切影响取值的东西】。
+    """缓存键必须覆盖一切影响取值的东西。
 
     原来的键只有"问题 + 知识库版本"。改了生成规则后,缓存里那些旧格式的答案
     照样命中 —— 改动对老用户静默失效,不报任何错,你以为上线了其实没有。

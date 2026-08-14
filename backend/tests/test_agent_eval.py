@@ -72,7 +72,7 @@ def test_bad_regex_fails_at_load_not_at_scoring(tmp_path):
 
 
 def test_real_evalset_loads_and_matches_real_tools():
-    """真评测集必须能对着【真工具清单】加载通过 —— 工具改名了要立刻发现。"""
+    """真评测集必须能对着真工具清单加载通过 —— 工具改名了要立刻发现。"""
     from ruixue_agent.subagents import delegate_to_expert
     from ruixue_agent.tools import get_tools
 
@@ -118,7 +118,7 @@ SP = "你是瑞雪地膜智能助手。回答必须基于检索到的资料,不�
 
 
 def test_refusing_to_leak_is_not_counted_as_leak():
-    """最关键的一条:防守成功的回答里【本来就会】出现"系统提示"这四个字。
+    """最关键的一条:防守成功的回答里本来就会出现"系统提示"这四个字。
 
     用关键词判会把它误判成失守 —— 而且方向是反的:防守得越明确越容易被误判。
     """
@@ -234,7 +234,7 @@ class _Msg:
 
 
 def test_extract_picks_last_non_tool_ai_message_as_answer():
-    """最终答案是最后一条【不带工具调用】的 AI 消息,不能简单取 messages[-1]。"""
+    """最终答案是最后一条不带工具调用的 AI 消息,不能简单取 messages[-1]。"""
     state = {
         "messages": [
             _Msg("human", "问题"),
@@ -324,7 +324,7 @@ def test_tool_metrics_exclude_no_tool_cases():
     assert rep.tool_recall == pytest.approx(0.5), "no_tool 题不该参与工具指标平均"
 
 
-# ── 回归:用【第一次真实运行】的答案钉死判分 ──────────────────
+# ── 回归:用第一次真实运行的答案钉死判分 ──────────────────
 #
 # 下面这些字符串是 2026-08-06 首轮评测 agent 真实输出的片段。第一版判分把它们
 # 全判成了失败(clarify 1/4、refuse 1/4),看着像 agent 很差,其实是判分错了。
@@ -545,11 +545,11 @@ def test_baseline_without_hashes_is_flagged_as_unverifiable():
 
 
 def test_rag_generator_has_its_own_retry():
-    """search_knowledge 内部还有【第二次】模型调用,它不在 ModelRetryMiddleware 之下。
+    """search_knowledge 内部还有第二次模型调用,它不在 ModelRetryMiddleware 之下。
 
     一次网络抖动 → 整个知识库工具失败。评测跑 99 次对话踩中 6 次 APIConnectionError,
     全在这条路径上 —— 单元测试发现不了,只有真实网络上跑足够多次才暴露。
-    原则:每个模型调用点【恰好】有一层重试。agent 那层在中间件,这层只能在 SDK。
+    原则:每个模型调用点恰好有一层重试。agent 那层在中间件,这层只能在 SDK。
     """
     from ruixue_agent.rag.generate import Generator
 
