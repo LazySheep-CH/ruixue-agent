@@ -2,7 +2,7 @@
 
 为什么 persistence/ 是独立模块而不是塞进 ingestion:
     表是 ingestion(写)和 rag(读)共用的。塞进 ingestion 等于说
-    "这是解析管道的私有东西",语义就错了。参考架构 也是把 persistence/ 和 agents/ 平级放。
+    "这是解析管道的私有东西",语义就错了。persistence/ 与 agents/ 平级。
 
 为什么用 SQLAlchemy 模型而不是手写 SQL:
     1) 模型是代码:有类型、能被 IDE 检查、能被测试

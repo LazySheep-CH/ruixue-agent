@@ -1,6 +1,6 @@
 # 瑞雪前端
 
-Next.js 15 (App Router) + TypeScript + Tailwind + zustand。对标参考架构的前端组织方式。
+Next.js 15 (App Router) + TypeScript + Tailwind + zustand。
 
 ## 跑起来
 

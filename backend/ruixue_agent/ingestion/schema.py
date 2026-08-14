@@ -6,7 +6,7 @@
 用 Pydantic 而不是 dataclass,因为这个 IR:
   1) 要落盘再读回(data/parsed/*.json)→ model_dump_json / model_validate_json 自动搞定嵌套
   2) 吃 parser 的外部脏数据 → 构造时自动校验类型,坏数据在入口就被拦(Parse, don't validate)
-  3) 和 参考架构 一致(它全用 Pydantic)
+  3) 与主流实现一致(全用 Pydantic)
 """
 
 from __future__ import annotations

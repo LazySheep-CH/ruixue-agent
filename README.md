@@ -33,14 +33,13 @@ Agent 指标是**端到端**的(工具选择 / 拒答 / 追问 / 注入 / 成本
 ## 架构
 
 本项目是一个**智能体(agent)**:以 LangChain `create_agent` 的 ReAct 循环为核心,
-把知识检索、用量计算等能力做成**工具**交它自主调用。代码分两个包,对标参考架构的
-**harness / app 分离**:
+把知识检索、用量计算等能力做成**工具**交它自主调用。代码分两个包,**harness / app 分离**:
 
 - **`ruixue_agent/`(harness)** — agent 框架,**不认识 HTTP**,可被 Web / 飞书 / CLI 复用
 - **`ruixue_app/`(app)** — 服务层(FastAPI),依赖 harness、**反向不行**(ports-and-adapters)
 
 ```
-backend/                       # Python 侧(对标参考架构的 backend/)
+backend/                       # Python 侧(harness 与 app 分离)
 ├── ruixue_agent/              HARNESS:agent 框架,不认识 HTTP,可被 Web/飞书/CLI 复用
 │   ├── agents/                装配:builder(模型+工具+提示+checkpointer+8 层中间件)
 │   ├── tools/                 14 个领域工具:用量 · 土壤/气候 · 天气预报 · 三项性能预测

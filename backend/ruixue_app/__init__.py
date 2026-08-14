@@ -1,6 +1,6 @@
 """ruixue_app:服务层(APP)。
 
-对标参考架构的 app/(Gateway)。这里放"把 agent 核心接入外界"的适配器——
+服务层(Gateway):这里放"把 agent 核心接入外界"的适配器——
 目前是 FastAPI(HTTP)。将来的飞书/Slack 网关、CLI 也放这层。
 
 依赖方向单向:ruixue_app ──→ ruixue_agent。

@@ -1,11 +1,5 @@
-# ── 数据不进 git:判断标准 = 能否用代码重新生成 ──
-# 两个例外是【手工标注、重跑管道得不到的复现根基】:
-#   data/predictors/  预测模型训练输入
-#   data/eval/        评测集(尺子)。不入库,README 里的指标就无人能复现
-# 必须用 data/* 而非 data/ —— 整目录被忽略时,子目录例外不生效
-data/*
-!data/predictors/
-!data/eval/
+# 数据一律不入库(训练输入、评测集、解析产物)
+data/
 mineru-out/
 
 # 模型权重与运行产物

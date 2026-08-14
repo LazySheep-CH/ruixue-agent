@@ -3,7 +3,7 @@ name = "ruixue-agent"
 version = "0.1.0"
 description = "瑞雪智能体 —— 从零正规搭建的 LangGraph agent（配置驱动、多模型）"
 requires-python = ">=3.11"
-# 版本锁成和 参考架构 一样，这样你在 参考架构 学到的 API 和这里完全一致。
+# 版本显式锁定,保证 API 行为可复现。
 dependencies = [
     "langchain==1.2.15",
     "langchain-core==1.3.3",

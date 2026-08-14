@@ -1,6 +1,6 @@
 """Agent 中间件:横切关注点(计时/日志/错误处理…),套在模型/工具调用外,不动业务逻辑。
 
-create_agent(middleware=[...]) 接收它们。参考架构 的中间件链也是这么叠的。
+create_agent(middleware=[...]) 接收它们,按声明顺序叠成链。
 钩子(和你 mini-harness 写过的一样):
     before_model(state, runtime)      模型调用前
     after_model(state, runtime)       模型调用后

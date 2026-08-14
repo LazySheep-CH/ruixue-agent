@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -71,6 +72,10 @@ def test_bad_regex_fails_at_load_not_at_scoring(tmp_path):
         load_cases(p)
 
 
+@pytest.mark.skipif(
+    not Path("data/eval/agent_evalset.jsonl").exists(),
+    reason="评测集不入库(数据不公开),仅本机校验",
+)
 def test_real_evalset_loads_and_matches_real_tools():
     """真评测集必须能对着真工具清单加载通过 —— 工具改名了要立刻发现。"""
     from ruixue_agent.subagents import delegate_to_expert

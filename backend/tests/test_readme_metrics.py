@@ -99,6 +99,10 @@ def test_readme_ablation_chain_matches_baseline():
     )
 
 
+@pytest.mark.skipif(
+    not (BACKEND / "data" / "eval" / "evalset.jsonl").exists(),
+    reason="评测集不入库(数据不公开),仅本机校验",
+)
 def test_readme_evalset_size_matches_file():
     """README 声称的评测集题数,必须等于文件真实行数。
 
