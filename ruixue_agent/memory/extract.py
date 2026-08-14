@@ -31,6 +31,18 @@ logger = logging.getLogger("ruixue.memory")
 # 抽取用便宜模型:这是内部动作,用户看不到,没必要用贵的。
 _EXTRACT_MODEL = "deepseek-v4-flash"
 
+# 抽取的重试次数。
+#
+# 这次模型调用**不在任何中间件之下**(它在 _remember_async 里,是运行结束后
+# 单独发起的),所以重试只能在 SDK 这一层。和 rag/generate.py 的
+# GENERATOR_RETRIES 同一个理由,取同一个值 —— 原则是
+# **每个模型调用点恰好有一层重试**,不多不少。
+#
+# 实测(2026-08-12 记忆收益实验,48 次对话):踩中 8 次 APIConnectionError,
+# max_retries=1 顶不住,两道题因此完全没抽到事实。失败还是静默的
+# (extract_facts 把异常都吞了),表现为"这个用户的记忆莫名其妙少了几条"。
+_EXTRACT_RETRIES = 2
+
 _SYSTEM = """你是记忆抽取器。从用户与地膜助手的一轮对话里,抽出【值得长期记住】的事实。
 
 只抽这四类,每条一句话,用第三人称陈述:
@@ -60,7 +72,7 @@ def extract_facts(question: str, answer: str) -> list[tuple[str, str]]:
     if not question.strip():
         return []
     try:
-        resp = create_model(_EXTRACT_MODEL, max_retries=1).invoke(
+        resp = create_model(_EXTRACT_MODEL, max_retries=_EXTRACT_RETRIES).invoke(
             [
                 {"role": "system", "content": _SYSTEM},
                 {
