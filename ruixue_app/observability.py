@@ -28,11 +28,8 @@ class RequestIdLogFilter(logging.Filter):
     """
 
     def filter(self, record: logging.LogRecord) -> bool:
-        # ===== (你写一行)=====
-        # 把当前请求的编号,盖到这条日志记录上(取当前"餐盘"里的值):
-        #   record.request_id = request_id_var.get()
         record.request_id = request_id_var.get()
-        return True  # True = 放行这条日志(我们只借它加字段,不丢弃任何日志)
+        return True  # 只借 filter 挂字段,不丢弃任何日志
 
 
 def configure_logging(level: int = logging.INFO) -> None:
@@ -59,10 +56,7 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next):
-        # ===== (你写一行)=====
-        # 优先用调用方传来的 X-Request-ID(便于跨服务把同一次调用串起来),
-        # 没有就自己生成一个短随机串。uuid4().hex 是 32 位十六进制,取前 12 位够用:
-        #   rid = request.headers.get("X-Request-ID") or uuid.uuid4().hex[:12]
+        # 优先沿用调用方传来的 X-Request-ID(跨服务串联同一次调用),没有则生成
         rid = request.headers.get("X-Request-ID") or uuid.uuid4().hex[:12]
         token = request_id_var.set(rid)  # 存进"餐盘";token 用于稍后精确还原
         try:

@@ -2,7 +2,6 @@
 
 对标 InMemorySaver(进程内存、重启即失),这里换成 PostgresSaver。
 换的是"状态存哪",不是"接口"—— 两者都实现 BaseCheckpointSaver,agent 侧几乎无感。
-和 web 从"内存 session"演进到"Redis/DB session store"是同一个道理。
 """
 
 import os
