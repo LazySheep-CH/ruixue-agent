@@ -1,4 +1,6 @@
-# 瑞雪智能体（ruixue-agent）（还没写完，还在持续更新）
+# 瑞雪智能体（ruixue-agent）
+
+[![CI](https://github.com/LazySheep-CH/ruixue-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/LazySheep-CH/ruixue-agent/actions/workflows/ci.yml)
 
 面向地膜行业、从零正规搭建的中文**智能体(agent)**。
 核心能力是一套可溯源的知识库 —— 把 1500+ 篇文献和国标规程做成可检索的知识,包装成工具交由
@@ -15,12 +17,15 @@ agent 按需调用,生成带**引用出处**的答案(另配用量估算工具);
 | 向量 | 223,386 条(BAAI/bge-small-zh-v1.5, 512 维) |
 | 检索质量 | Recall@1 **0.769** / Recall@5 0.952 / Recall@10 **0.979** / MRR **0.849**(向量+BM25+重排) |
 | 逐层增益 | 纯向量 R@1 0.593 → +混合 0.631 → +重排 **0.769** |
-| **Agent 质量** | 33 题冻结评测集 **32/33**;工具选择 recall 1.000 / precision 0.878;噪声地板 0% |
-| 测试 | 328 个(RAG 全覆盖 + agent 中间件层 + 运行时/限流/记忆/评测) |
+| **Agent 质量** | 33 题冻结评测集 **32/33(97.0%)**;工具选择 recall 1.000 / precision 0.921;噪声地板 0% |
+| 能力面 | 14 个领域工具 · 4 位专家子 agent · 3 个自训预测模型 · MCP 双向 |
+| 记忆收益 | 12 题跨会话对照,三轮实测任务完成率 44.4% → 77.8%(+33.3pp) |
+| 安全 | 10 类攻击面专项评测 10/10 拦截(注入/越权/路径逃逸/诱导编造等) |
+| 测试 | 427 个(RAG / 中间件 / 运行时 / 记忆 / 分析 / MCP / 指标告警) |
 
 检索指标由 338 题评测集测出(其中 290 题有答案计入 Recall,48 题为不可答题用于验证拒答;
 合成 + 人工质检 + TREC pooling 多标注),方法见 `docs/评测方法.md`。
-指标口径以 `uv run python scripts/run_eval.py --ab` 的输出为准 —— 本表若与之不符,以脚本为准。
+指标口径以 `cd backend && uv run python scripts/run_eval.py --ab` 的输出为准 —— 本表若与之不符,以脚本为准。
 Agent 指标是**端到端**的(工具选择 / 拒答 / 追问 / 注入 / 成本),方法与首次基线见
 [docs/Agent评测方法.md](docs/Agent评测方法.md)。两者分工:检索层只说明"料是对的",
 不说明 agent 会不会去查、查完会不会用。
@@ -35,46 +40,32 @@ Agent 指标是**端到端**的(工具选择 / 拒答 / 追问 / 注入 / 成本
 - **`ruixue_app/`(app)** — 服务层(FastAPI),依赖 harness、**反向不行**(ports-and-adapters)
 
 ```
-ruixue_agent/                # HARNESS:agent 框架(不认识 HTTP)
-├── agents/                  agent 装配层
-│   ├── builder.py             create_ruixue_agent(模型+工具+提示+记忆+中间件)
-│   ├── prompt.py             系统提示(独立资产,便于迭代)
-│   └── middlewares.py        计时日志(可观测)+ 工具错误降级(扛得住)
-├── tools/                   agent 的工具(calc 用量估算 · rag 知识检索 · web 兜底)
-├── models.py                模型工厂(按配置装配 LLM)
-├── checkpointer.py          会话记忆(PostgreSQL 持久化,按 thread_id 存取)
-├── config.py                配置加载(YAML + $ENV 解析)
-│
-│   ——— 以下 RAG 子系统,按【调用频率】分三层(频率决定设计目标)———
-├── ingestion/              离线入库(一份文档一辈子跑一次 → 要准,慢无妨)
-│   ├── schema.py             统一中间结构 IR(Document / Element / Chunk)
-│   ├── parsers/              MinerU 输出 → IR
-│   ├── stages/               clean · dedup · metadata · quality · chunk
-│   └── utils/                latex · table · frontmatter
-├── persistence/            存储(数据的 source of truth → 别丢)
-│   ├── models.py             SQLAlchemy 表结构(documents / chunks / term_df)
-│   ├── repository.py         对象 ⇄ 数据库行,幂等 upsert
-│   └── migrations/           Alembic 版本化迁移(可回滚可追溯)
-└── rag/                    在线检索(每次提问都跑 → 要快)
-    ├── embedding.py          文本 → 向量
-    ├── milvus_store.py       向量索引(只存 id+向量+过滤字段,不存文本)
-    ├── bm25.py               词法检索(PG 全文,靠罕见词精确定位)
-    ├── text_segment.py       中文分词(jieba + 领域词典 + 标准号保护)
-    ├── fusion.py             RRF 融合多路排名
-    ├── rerank.py             cross-encoder 精排
-    ├── retriever.py          编排:Small-to-Big + 混合 + 重排
-    ├── metrics.py            Recall@k / MRR
-    └── generate.py           检索结果 → 带引用的答案(grounding)
-
-ruixue_app/                  # APP:服务层(FastAPI),依赖 harness
-├── main.py                  POST /chat(多轮)· /chat/stream(SSE)· /health · CORS
-├── auth.py                  API Key 认证 + 按用户命名空间隔离
-└── observability.py         request_id 追踪 + 结构化日志
-
-frontend/                    # WEB:聊天界面(Next.js + TS + Tailwind + zustand)
-├── src/core/                业务核心(类型 · SSE 客户端 · 状态),不认识 React
-├── src/components/chat/     组件(会话面板 · 顶栏 · 消息列表 · 输入框)
-└── src/app/                 App Router 页面
+backend/                       # Python 侧(对标 deer-flow 的 backend/)
+├── ruixue_agent/              HARNESS:agent 框架,不认识 HTTP,可被 Web/飞书/CLI 复用
+│   ├── agents/                装配:builder(模型+工具+提示+checkpointer+8 层中间件)
+│   ├── tools/                 14 个领域工具:用量 · 土壤/气候 · 天气预报 · 三项性能预测
+│   │                          · 配方筛选 · 知识检索 · 上传数据分析
+│   ├── subagents.py           4 位专家子 agent(文献检索/配方优化/故障诊断/数据分析)
+│   ├── memory/                长期记忆:运行后抽取事实,PG 存权威 + 向量召回,按用户隔离
+│   ├── analysis/              上传数据:列名归一 → 契约校验 → 入库 → 统计与模型对比
+│   ├── predictors/            三个自训性能预测模型(降解率/透过率/拉伸强度)+ 环境取数
+│   ├── mcp/                   MCP 客户端:按配置接入外部工具,连不上自动降级
+│   ├── skills/                技能(SOP)按需注入
+│   ├── eval/                  评测框架:轨迹抽取 · 判分 · 噪声地板 · 记忆收益对照
+│   ├── ingestion/             离线入库(MinerU → 清洗/去重/分块 → 双写)
+│   ├── persistence/           SQLAlchemy 模型 + Alembic 迁移(数据的 source of truth)
+│   ├── rag/                   在线检索:向量+BM25 → RRF → 重排 → 带引用生成
+│   └── models.py · checkpointer.py · config.py · guardrails/
+├── ruixue_app/                APP:FastAPI 服务层,依赖 harness,反向不行
+│   ├── main.py                /chat(SSE)· /datasets · /metrics · 报告导出 · 健康探针
+│   ├── runs.py                异步 Run:后台线程池 + Redis Stream,断线续跑/重连补发
+│   ├── auth.py · quota.py     JWT / API Key · 每日配额(fail-open)
+│   ├── mcp_server.py          MCP 服务端:把自有能力暴露给外部 agent(默认关闭)
+│   └── metrics.py · report.py · observability.py · security/
+├── tests/ · scripts/ · data/ · config/
+frontend/                      # 聊天界面(Next.js + TS),登录 · 流式 · 上传 · 报告下载
+docker/                        # compose 编排 + nginx(TLS 模板)
+scripts/ops/                   # 部署 / 备份(含异地同步)/ 告警巡检
 ```
 
 设计要点:
@@ -103,15 +94,15 @@ PDF ─MinerU─▶ IR ─ clean·dedup·metadata·quality·chunk ─▶ Postgre
 ## 快速开始
 
 ```bash
-# 1. 依赖(项目以 editable 包安装,含 GPU 版 torch)
-uv sync
+# 1. 依赖(Python 侧都在 backend/ 下)
+cd backend && uv sync
 
 # 2. 配置(复制模板,填入自己的模型 key —— 通过环境变量,不写死)
-cp config/config.example.yaml config/config.yaml
+cp config/config.example.yaml config/config.yaml   # 在 backend/ 目录下
 export DEEPSEEK_API_KEY=你的key
 
 # 3. 起基础设施(PostgreSQL + Milvus)
-cd docker && cp .env.example .env && docker compose up -d && cd ..
+cd ../docker && cp .env.example .env && docker compose up -d && cd ../backend
 
 # 4. 建库(数据库结构由 Alembic 管理)
 uv run alembic -c ruixue_agent/persistence/migrations/alembic.ini upgrade head
