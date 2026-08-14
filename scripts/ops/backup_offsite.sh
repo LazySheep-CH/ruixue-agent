@@ -23,7 +23,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-BACKUP_DIR="${BACKUP_DIR:-$ROOT/backups}"
+BACKUP_DIR="${BACKUP_DIR:-$ROOT/backend/backups}"
 
 # 允许把 OFFSITE_TARGET 写在 docker/.env 里(和数据库凭据同一处,少一个要记的地方)
 if [ -f "$ROOT/docker/.env" ]; then set -a; source "$ROOT/docker/.env"; set +a; fi

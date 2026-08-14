@@ -11,7 +11,10 @@ on:
 jobs:
   # ── 作业一:代码规范(快,不装重依赖)────────────────────────
   lint:
-    runs-on: ubuntu-latest # 用 GitHub 提供的 Linux 机器
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend # 用 GitHub 提供的 Linux 机器
     steps:
       - uses: actions/checkout@v4 # 把仓库代码拉到这台机器上
       - uses: astral-sh/setup-uv@v5 # 装 uv(我们的包管理器)
@@ -26,6 +29,9 @@ jobs:
   # ── 作业二:跑测试 ──────────────────────────────────────────
   test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
     env:
       # 测试只【构造】模型客户端、不真调 DeepSeek,给个占位 key 让配置能解析即可。
       DEEPSEEK_API_KEY: sk-ci-dummy
