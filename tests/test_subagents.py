@@ -155,3 +155,50 @@ def test_failed_delegation_is_also_recorded():
             with pytest.raises(RuntimeError):
                 delegate_to_expert.invoke({"expert": "文献检索专家", "task": "x"})
     assert len(runs) == 1 and runs[0].ok is False and runs[0].error == "RuntimeError"
+
+
+# ── 故障诊断专家:工具集是【设计决策】,不是随手配的 ────────────
+
+
+def test_diagnosis_expert_is_registered_and_routable():
+    """专家的 description 会被拼进 delegate 的工具描述 —— 那是主 agent 唯一的路由依据。
+
+    加了专家却没写清"什么时候派它",主 agent 就永远派不到它,而且不会报错。
+    """
+    from ruixue_agent.subagents import delegate_to_expert
+
+    assert "故障诊断专家" in sub._EXPERTS
+    desc = delegate_to_expert.description
+    assert "故障诊断专家" in desc, "专家没出现在路由描述里,主 agent 看不见它"
+    assert "破裂" in desc or "已发生" in desc, "路由描述没说清触发条件"
+
+
+def test_diagnosis_expert_has_the_baseline_tool():
+    """诊断的第一步是"该配方在当地【本该】表现如何" —— 没有基准就无法判断偏差。
+
+    predict_by_location 是这条方法论的地基,少了它,专家只能凭常识猜。
+    """
+    names = [t.name for t in sub._EXPERTS["故障诊断专家"]["tools"]]
+    assert "predict_by_location" in names
+
+
+def test_diagnosis_expert_deliberately_lacks_recipe_screening():
+    """**刻意不给 screen_film_recipes** —— 这条容易被后人"顺手补上"。
+
+    诊断是【找原因】,选型是【给方案】。给了筛选工具,模型会跳过排查直接
+    推荐新配方 —— 而用户想知道的是"这次为什么坏了"。实测两个案例都在
+    第一步就算基准、并据此判断"是产品预期不匹配还是真异常",
+    有了筛选工具这条路径大概率会被抄近道绕过。
+    """
+    names = [t.name for t in sub._EXPERTS["故障诊断专家"]["tools"]]
+    assert "screen_film_recipes" not in names, (
+        "诊断专家拿到了选型工具 —— 它会跳过排查直接推荐新配方"
+    )
+
+
+def test_every_expert_declares_when_to_use_it():
+    """所有专家都必须有非空 description —— 少了它这位专家等于不存在。"""
+    for name, spec in sub._EXPERTS.items():
+        assert spec.get("description", "").strip(), f"专家「{name}」没写 description"
+        assert spec.get("tools"), f"专家「{name}」没有工具"
+        assert spec.get("prompt", "").strip(), f"专家「{name}」没有系统提示"

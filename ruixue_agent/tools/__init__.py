@@ -7,6 +7,7 @@
 from langchain_core.tools import BaseTool
 
 from ruixue_agent.tools.calc import estimate_film_usage
+from ruixue_agent.tools.dataset import describe_dataset
 from ruixue_agent.tools.environment import get_environment_tools
 from ruixue_agent.tools.optimize import get_optimize_tools
 from ruixue_agent.tools.predictor import get_predictor_tools
@@ -26,6 +27,14 @@ def get_tools() -> list[BaseTool]:
         *get_environment_tools(),  # 环境查询:土壤(离线)/ 气候(NASA 在线)
         *get_predictor_tools(),  # 性能预测:按地点综合 + 降解率/透过率/拉伸强度
         *get_optimize_tools(),  # 配方批量试算(对比表);权衡推荐见「配方优化专家」
+        # 上传数据:主 agent 只留【看概览】这一个。
+        #
+        # 实测:4 个数据集工具的 schema 共 2467 字,占全部工具 schema 的 22% ——
+        # 而这部分是【每轮都要重发】的固定开销,绝大多数用户从不上传数据。
+        # 所以只把最常用、最轻的 describe_dataset 留在主 agent(看一眼表里有什么,
+        # 一次调用就出结果,不值得为它启动一整条嵌套 LLM 循环);
+        # 真正的分析(比预测/找异常/判国标)需要多轮编排和解读,归「数据分析专家」。
+        describe_dataset,
         # 【待做】成本估算:价格是时变+商业敏感数据,不写死在代码里。设计为
         #   成本 = 用量(kg) × 单价 —— 单价优先用用户传入(他知道本地采购价),
         #   否则读 config.yaml 的参考价(标注日期/来源)。
