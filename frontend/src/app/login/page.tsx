@@ -1,11 +1,17 @@
 "use client";
 
+import { ArrowRight, Leaf, LockKeyhole, ShieldCheck, UserRound } from "lucide-react";
+import { AnimatePresence, m } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { toast } from "sonner";
 
 import { submitCredentials } from "~/core/auth";
 
-/** 登录 / 注册页(同一页切换两种模式,少一个页面少一份重复)。 */
+function BrandMark() {
+  return <div className="brand-mark" aria-hidden="true"><span /><span /><span /></div>;
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -13,16 +19,16 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-
   const isRegister = mode === "register";
 
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setError("");
     setBusy(true);
     try {
       await submitCredentials(mode, username.trim(), password);
-      router.replace("/"); // replace:登录后按返回键不该回到登录页
+      toast.success(isRegister ? "研究空间已创建" : "登录成功");
+      router.replace("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "操作失败");
     } finally {
@@ -31,72 +37,89 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex h-screen items-center justify-center bg-background px-4">
-      <div className="w-full max-w-[380px]">
-        <div className="mb-7 text-center">
-          <div className="mx-auto mb-4 h-12 w-12 rounded-[14px] bg-primary" />
-          <h1 className="text-[22px] font-semibold">瑞雪地膜智能助手</h1>
-          <p className="mt-1 text-[13px] text-muted-foreground">知识问答 · 性能预测 · 用量估算</p>
-        </div>
-
-        <form
-          onSubmit={onSubmit}
-          className="rounded-[var(--radius)] border border-border bg-card p-6 shadow-sm"
-        >
-          <div className="mb-4 flex gap-1 rounded-[10px] bg-background p-1">
-            {(["login", "register"] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => {
-                  setMode(m);
-                  setError("");
-                }}
-                className={`flex-1 rounded-lg py-1.5 text-sm transition
-                  ${mode === m ? "bg-card font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                {m === "login" ? "登录" : "注册"}
-              </button>
-            ))}
+    <m.main className="login-shell" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <m.section
+        className="login-panel"
+        initial={{ opacity: 0, x: -18 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <m.div className="login-card" layout>
+          <div className="login-brand">
+            <BrandMark />
+            <div><strong>瑞雪智研</strong><span>农业材料智能体</span></div>
           </div>
 
-          <label className="mb-1.5 block text-[13px] text-muted-foreground">用户名</label>
-          <input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            autoComplete="username"
-            placeholder="至少 3 个字符"
-            className="mb-3.5 w-full rounded-[10px] border border-border bg-background px-3 py-2.5 outline-none
-              focus:border-primary/50 focus:bg-card"
-          />
+          <h1>{isRegister ? "创建研究空间" : "欢迎回来"}</h1>
+          <p>{isRegister ? "建立你的专属会话与研究记录。" : "登录后继续你的材料研究与分析任务。"}</p>
 
-          <label className="mb-1.5 block text-[13px] text-muted-foreground">密码</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete={isRegister ? "new-password" : "current-password"}
-            placeholder="至少 6 个字符"
-            className="w-full rounded-[10px] border border-border bg-background px-3 py-2.5 outline-none
-              focus:border-primary/50 focus:bg-card"
-          />
+          <div className="login-tabs">
+            <button type="button" className={mode === "login" ? "active" : ""} onClick={() => { setMode("login"); setError(""); }}>登录</button>
+            <button type="button" className={mode === "register" ? "active" : ""} onClick={() => { setMode("register"); setError(""); }}>注册</button>
+          </div>
 
-          {error && <p className="mt-3 text-[13px] text-destructive">{error}</p>}
+          <form onSubmit={onSubmit}>
+            <label className="field">
+              <span>用户名</span>
+              <div className="field__control">
+                <UserRound size={15} />
+                <input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" placeholder="请输入用户名" />
+              </div>
+            </label>
 
-          <button
-            type="submit"
-            disabled={busy || !username.trim() || !password}
-            className="mt-5 w-full rounded-[10px] bg-primary py-2.5 font-medium text-primary-foreground transition
-              hover:opacity-90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
-          >
-            {busy ? "处理中…" : isRegister ? "注册并进入" : "登录"}
-          </button>
-        </form>
+            <label className="field">
+              <span>密码</span>
+              <div className="field__control">
+                <LockKeyhole size={15} />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  autoComplete={isRegister ? "new-password" : "current-password"}
+                  placeholder={isRegister ? "至少 6 个字符" : "请输入密码"}
+                />
+              </div>
+            </label>
 
-        <p className="mt-4 text-center text-xs text-muted-foreground">
-          {isRegister ? "注册即创建你的专属会话空间,对话仅自己可见" : "还没有账号?点上方切换到注册"}
-        </p>
-      </div>
-    </div>
+            <AnimatePresence initial={false}>
+              {error ? (
+                <m.p
+                  className="login-error"
+                  role="alert"
+                  initial={{ opacity: 0, height: 0, y: -4 }}
+                  animate={{ opacity: 1, height: "auto", y: 0 }}
+                  exit={{ opacity: 0, height: 0 }}
+                >
+                  {error}
+                </m.p>
+              ) : null}
+            </AnimatePresence>
+
+            <button type="submit" disabled={busy || !username.trim() || !password} className="login-submit">
+              {busy ? "处理中…" : isRegister ? "注册并进入" : "进入工作台"}
+              {!busy && <ArrowRight size={15} />}
+            </button>
+          </form>
+
+          <div className="login-meta">
+            <ShieldCheck size={13} />
+            {isRegister ? "会话数据仅在你的专属空间内可见" : "登录会话受令牌校验保护"}
+          </div>
+        </m.div>
+      </m.section>
+
+      <section className="login-visual">
+        <div className="login-visual__content">
+          <div className="login-visual__eyebrow"><Leaf size={14} />RUIXUE MATERIAL INTELLIGENCE</div>
+          <h2>让每一次材料决策，<br /><span>都有数据与文献依据。</span></h2>
+          <p>面向生物降解地膜研发与应用，连接专业知识、环境数据和性能模型，把复杂分析组织成清晰、可追溯的研究过程。</p>
+          <div className="login-visual__stats">
+            <div><strong>1500+</strong><span>专业文献与标准</span></div>
+            <div><strong>3 类</strong><span>核心性能预测</span></div>
+            <div><strong>可追溯</strong><span>工具过程与引用</span></div>
+          </div>
+        </div>
+      </section>
+    </m.main>
   );
 }

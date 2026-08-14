@@ -1,123 +1,190 @@
 "use client";
 
+import {
+  ChevronDown,
+  Clock3,
+  FileText,
+  Folder,
+  HelpCircle,
+  LogOut,
+  Plus,
+  Search,
+  Settings,
+  Trash2,
+  X,
+} from "lucide-react";
+import { AnimatePresence, m } from "motion/react";
 import { useMemo, useState } from "react";
 
-import { useStore } from "~/core/store";
 import type { Thread } from "~/core/types";
 
-/** 按时间把会话分组 —— 学自 Claude Code:侧栏用分组标题,而非一长条平铺。 */
-function groupThreads(threads: Thread[]): { label: string; items: Thread[] }[] {
-  const DAY = 86_400_000;
-  const now = Date.now();
-  const buckets: Record<string, Thread[]> = { 今天: [], 最近7天: [], 更早: [] };
-  for (const t of threads) {
-    const age = now - t.createdAt;
-    if (age < DAY) buckets["今天"].push(t);
-    else if (age < 7 * DAY) buckets["最近7天"].push(t);
-    else buckets["更早"].push(t);
-  }
-  return Object.entries(buckets)
-    .filter(([, items]) => items.length > 0)
-    .map(([label, items]) => ({ label, items }));
-}
+import { workspaceModules, type WorkspaceModule } from "./workspace-data";
 
-/**
- * 侧栏(结构学自 Claude Code 截图):
- * 窄(220px)、紧凑、会话按时间分组、每条带 ○ 圆点;收起后只留窄轨。
- */
-export function Sidebar({ open, onToggle }: { open: boolean; onToggle: () => void }) {
-  const { threads, currentThreadId, newThread, selectThread, deleteThread } = useStore();
-  const [q, setQ] = useState("");
-
-  const groups = useMemo(
-    () => groupThreads(q ? threads.filter((t) => t.title.includes(q)) : threads),
-    [threads, q],
-  );
-
-  if (!open) {
-    return (
-      <div className="flex w-11 shrink-0 flex-col items-center border-r border-border bg-sidebar py-2.5">
-        <button
-          onClick={onToggle}
-          title="展开侧栏"
-          className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
-        >
-          ☰
-        </button>
-      </div>
-    );
-  }
+export function Sidebar({
+  open,
+  activeModule,
+  threads,
+  currentThreadId,
+  username,
+  onSelectModule,
+  onNewThread,
+  onSelectThread,
+  onDeleteThread,
+  onLogout,
+  onClose,
+}: {
+  open: boolean;
+  activeModule: WorkspaceModule;
+  threads: Thread[];
+  currentThreadId: string | null;
+  username: string;
+  onSelectModule: (module: WorkspaceModule) => void;
+  onNewThread: () => void;
+  onSelectThread: (id: string) => void;
+  onDeleteThread: (id: string) => void;
+  onLogout: () => void;
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const filteredThreads = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase("zh-CN");
+    if (!normalized) return threads;
+    return threads.filter((thread) => thread.title.toLocaleLowerCase("zh-CN").includes(normalized));
+  }, [query, threads]);
 
   return (
-    <aside className="flex w-[220px] shrink-0 flex-col border-r border-border bg-sidebar text-sidebar-foreground">
-      <div className="flex items-center gap-2 px-2.5 py-2.5">
-        <div className="size-5 shrink-0 rounded bg-primary" />
-        <span className="flex-1 truncate text-[13px] font-medium">瑞雪</span>
-        <button
-          onClick={onToggle}
-          title="收起侧栏"
-          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent"
-        >
-          ☰
-        </button>
-      </div>
-
-      <div className="space-y-0.5 px-2.5 pb-2">
-        <button
-          onClick={() => newThread()}
-          className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px]
-            text-muted-foreground transition hover:bg-accent hover:text-foreground"
-        >
-          <span className="text-[15px] leading-none">＋</span> 新对话
-        </button>
-        <div className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-muted-foreground focus-within:bg-accent">
-          <span className="text-[12px]">⌕</span>
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="搜索"
-            className="w-full bg-transparent text-[13px] outline-none placeholder:text-muted-foreground"
-          />
+    <>
+      <m.aside className={`sidebar${open ? " is-open" : ""}`} aria-label="研究工作区导航">
+        <div className="window-chrome" aria-hidden="true">
+          <span className="traffic traffic--red" />
+          <span className="traffic traffic--yellow" />
+          <span className="traffic traffic--green" />
         </div>
-      </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
-        {groups.length === 0 && (
-          <p className="px-2.5 py-3 text-[12.5px] text-muted-foreground">
-            {q ? "没有匹配的对话" : "还没有对话"}
-          </p>
-        )}
-        {groups.map((g) => (
-          <div key={g.label} className="mb-1">
-            <p className="px-2.5 py-1.5 text-[11.5px] text-muted-foreground">{g.label}</p>
-            {g.items.map((t) => (
-              <div
-                key={t.id}
-                onClick={() => selectThread(t.id)}
-                className={`group flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px]
-                  ${
-                    t.id === currentThreadId
-                      ? "bg-accent text-foreground"
-                      : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
-                  }`}
-              >
-                <span className="text-[9px] leading-none opacity-60">○</span>
-                <span className="flex-1 truncate">{t.title}</span>
-                <button
-                  title="删除"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deleteThread(t.id);
-                  }}
-                  className="shrink-0 opacity-0 transition group-hover:opacity-100 hover:text-primary"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
+        <div className="sidebar-title">
+          <div className="product-switcher">
+            <span className="product-glyph">瑞</span>
+            <span><strong>瑞雪智研</strong><small>农业材料智能工作台</small></span>
           </div>
-        ))}
-      </div>
-    </aside>
+          <button className="icon-button sidebar-close" onClick={onClose} aria-label="关闭侧边栏">
+            <X size={16} />
+          </button>
+        </div>
+
+        <m.button className="new-task-button" onClick={onNewThread} whileTap={{ scale: 0.975 }}>
+          <Plus size={16} />
+          <span>新建任务</span>
+          <kbd>Ctrl N</kbd>
+        </m.button>
+
+        <label className="sidebar-search">
+          <Search size={14} />
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="搜索任务"
+            aria-label="搜索任务"
+          />
+        </label>
+
+        <nav className="module-nav" aria-label="工作模块">
+          {workspaceModules.map((module) => {
+            const Icon = module.icon;
+            const active = activeModule === module.id;
+            return (
+              <button
+                type="button"
+                key={module.id}
+                className={active ? "is-active" : ""}
+                onClick={() => onSelectModule(module.id)}
+                aria-current={active ? "page" : undefined}
+              >
+                {active ? <m.span className="module-nav__active" layoutId="module-active" /> : null}
+                <Icon size={16} strokeWidth={1.8} />
+                <span>{module.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="sidebar-scroll">
+          <div className="sidebar-section-title"><span>项目</span></div>
+          <div className="project-row" aria-label="当前项目">
+            <Folder size={15} />
+            <span>2026 春播研究</span>
+            <ChevronDown size={13} />
+          </div>
+
+          <div className="record-list">
+            <AnimatePresence initial={false} mode="popLayout">
+              {filteredThreads.map((thread) => (
+                <m.div
+                  key={thread.id}
+                  layout
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -8 }}
+                  className={`record-row${currentThreadId === thread.id ? " is-active" : ""}`}
+                >
+                  <button onClick={() => onSelectThread(thread.id)} title={thread.title}>
+                    <FileText size={13} />
+                    <span>{thread.title}</span>
+                    <small>{formatRelativeTime(thread.createdAt)}</small>
+                  </button>
+                  <button
+                    className="record-row__delete"
+                    onClick={() => onDeleteThread(thread.id)}
+                    aria-label={`删除${thread.title}`}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </m.div>
+              ))}
+            </AnimatePresence>
+            {filteredThreads.length === 0 ? (
+              <p className="sidebar-empty">{query ? "没有匹配的任务" : "还没有研究任务"}</p>
+            ) : null}
+          </div>
+
+          <div className="sidebar-section-title sidebar-section-title--recent"><span>运行说明</span></div>
+          <div className="recent-row recent-row--static">
+            <Clock3 size={14} />
+            <span>关闭页面后，后台任务仍会继续</span>
+          </div>
+        </div>
+
+        <footer className="sidebar-footer">
+          <button disabled title="设置功能即将开放"><Settings size={15} /><span>设置</span></button>
+          <button disabled title="帮助功能即将开放"><HelpCircle size={15} /><span>帮助</span></button>
+          <button className="sidebar-user" onClick={onLogout} title="退出登录">
+            <span className="user-avatar">{username.slice(0, 1).toUpperCase() || "瑞"}</span>
+            <span className="sidebar-user__name">{username || "用户"}</span>
+            <LogOut size={14} />
+          </button>
+        </footer>
+      </m.aside>
+
+      <AnimatePresence>
+        {open ? (
+          <m.button
+            className="sidebar-scrim"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            aria-label="关闭侧边栏遮罩"
+          />
+        ) : null}
+      </AnimatePresence>
+    </>
   );
+}
+
+function formatRelativeTime(timestamp: number): string {
+  const days = Math.floor((Date.now() - timestamp) / 86_400_000);
+  if (days <= 0) return "今天";
+  if (days === 1) return "昨天";
+  if (days < 7) return `${days} 天前`;
+  return new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric" }).format(timestamp);
 }
