@@ -1,0 +1,31 @@
+{
+  "evalset": "data\\eval\\evalset.jsonl",
+  "n_total": 338,
+  "n_answerable": 290,
+  "layers": {
+    "纯向量": {
+      "recall@1": 0.5931,
+      "recall@3": 0.7931,
+      "recall@5": 0.8759,
+      "recall@10": 0.9655,
+      "mrr": 0.7096,
+      "n": 290
+    },
+    "+BM25(混合)": {
+      "recall@1": 0.631,
+      "recall@3": 0.8207,
+      "recall@5": 0.8897,
+      "recall@10": 0.969,
+      "mrr": 0.7409,
+      "n": 290
+    },
+    "+BM25+rerank": {
+      "recall@1": 0.769,
+      "recall@3": 0.9103,
+      "recall@5": 0.9517,
+      "recall@10": 0.9793,
+      "mrr": 0.8489,
+      "n": 290
+    }
+  }
+}
