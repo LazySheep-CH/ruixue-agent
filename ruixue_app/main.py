@@ -6,12 +6,13 @@
 """
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from langchain_core.messages import AIMessageChunk, ToolMessage
@@ -21,7 +22,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from ruixue_agent.agents import create_ruixue_agent
-from ruixue_app import runs
+from ruixue_app import mcp_server, metrics, report, runs
 from ruixue_app.auth import get_current_user  # 查询类端点只需认证,不消耗配额
 from ruixue_app.observability import RequestIdMiddleware, configure_logging
 from ruixue_app.quota import enforce_quota
@@ -33,6 +34,11 @@ configure_logging()
 # agent 先占位;真正在服务【启动】时才建(见下面的 lifespan)。
 _agent = None
 
+# MCP server:把我们的工具暴露给【外部 agent】用。默认关闭,见 mcp_server 模块。
+# 在这里建(模块级)而不是 lifespan 里:挂载子应用必须在 app 建好后立刻做,
+# 而 lifespan 是启动时才跑,那时路由表已经定型了。
+_mcp = mcp_server.build_server()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -43,10 +49,7 @@ async def lifespan(app: FastAPI):
     跑测试、被别的脚本导入,都会莫名其妙连库。放进 lifespan 后,
     只有真正【起服务】时才建,一次,之后所有请求复用同一个 agent。
     """
-    global _agent  # 要在函数里【改】模块全局变量,必须先声明 global
-    # ===== (你写一行)=====
-    # 服务启动:建一次 agent,存进 _agent 给所有请求复用:
-    #   _agent = create_ruixue_agent()
+    global _agent
     _agent = create_ruixue_agent()
     # 清理残留:进程上次被 kill 时,后台任务没了但库里还写着 running,
     # 用户会一直等一个永远不会完成的运行。启动时统一标记为失败。
@@ -58,7 +61,14 @@ async def lifespan(app: FastAPI):
         ensure_collection()
     except Exception:
         logging.getLogger("ruixue.app").warning("记忆库初始化失败,长期记忆将不可用", exc_info=True)
-    yield
+
+    # MCP server 有【自己的 lifespan】(会话管理器)。挂进来的子应用不会自动跑它的
+    # lifespan —— 必须在这里手动进上下文,否则请求会报 "task group is not initialized"。
+    # 这是挂载 ASGI 子应用最常见的坑:路由通了、启动不报错,一发请求才崩。
+    async with contextlib.AsyncExitStack() as stack:
+        if _mcp is not None:
+            await stack.enter_async_context(_mcp.session_manager.run())
+        yield
     # ↑ yield 前是"启动";yield 后是"关闭"。
     # 停机:停收新活 → 等在途 agent 跑完 → 剩下的立刻标记失败。
     # 不做的话,每次重新部署都会把正在跑的运行连人带钱一起丢掉,
@@ -85,7 +95,9 @@ ALLOWED_ORIGINS = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_methods=["GET", "POST"],
+    # DELETE 是给 /datasets/{id} 用的。少写一个方法不会报错,
+    # 只会让前端的删除按钮在跨域部署下静默失败(预检不通过)。
+    allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["Content-Type", "Authorization", "X-API-Key", "X-Request-ID"],
     expose_headers=["X-Request-ID"],  # 让前端能读到请求编号,便于报障
 )
@@ -119,6 +131,11 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # 认证路由:注册 / 登录 / 查当前用户
 app.include_router(auth_routes.router)
 
+# MCP server 挂载。AuthGate 包在外层 —— 子应用不吃 FastAPI 的 Depends,
+# 鉴权必须在 ASGI 这一层做,否则是【静默无鉴权】(接口能通,只是没人验身份)。
+if _mcp is not None:
+    app.mount(mcp_server.MOUNT_PATH, mcp_server.AuthGate(_mcp.streamable_http_app()))
+
 
 # ── 全局异常兜底(错误脱敏)────────────────────────────────────
 logger = logging.getLogger("ruixue.app")
@@ -132,11 +149,6 @@ async def _handle_unexpected(request: Request, exc: Exception) -> JSONResponse:
     DB 连接串、文件路径、堆栈,绝不能出现在返回给用户的响应里(泄露内部结构=送攻击者情报)。
     注:401/422/429 这些是"有意的"错误,由各自的处理器返回正确状态码,不会走到这里。
     """
-    # ===== (你写两行)=====
-    # 1. 把异常详情(含堆栈)记到服务端日志——logger.exception 会自动带上堆栈:
-    #      logger.exception("未处理异常: %s", exc)
-    # 2. 给用户返回脱敏的通用错误(注意:content 里【绝不能】放 exc 的内容!):
-    #      return JSONResponse(status_code=500, content={"detail": "服务器内部错误，请稍后重试"})
     logger.exception("未处理异常: %s", exc)
     return JSONResponse(status_code=500, content={"detail": "服务器内部错误，请稍后重试"})
 
@@ -152,6 +164,25 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/metrics")
+def prometheus_metrics(user_id: str = Depends(get_current_user)) -> Response:
+    """运行指标(Prometheus 文本格式)。
+
+    ## 为什么要鉴权
+
+    这些指标会告诉外人:我们有多少用户在用、失败率多少、容量上限是多少、
+    哪个依赖挂了。**对攻击者来说这是一张现成的作战地图** ——
+    知道容量上限就知道打多少并发能把你压垮,知道失败率就知道什么时候值得再试。
+
+    Prometheus 支持在 scrape 配置里带 header,所以加鉴权不影响接入:
+        authorization: [{ credentials: "<API Key>", type: "Bearer" }]
+
+    (业界也有靠网络隔离而不鉴权的做法,但那前提是内网真的隔离 ——
+     我们是单机 docker 部署,端口一暴露就没有内网了。)
+    """
+    return Response(content=metrics.render(), media_type="text/plain; version=0.0.4")
+
+
 @app.get("/health/ready")
 def health_ready():
     """就绪探针:数据库连得上才算 ready;连不上 -> 503,让上游把流量切走。"""
@@ -160,11 +191,6 @@ def health_ready():
     from ruixue_agent.persistence.engine import get_engine
 
     try:
-        # ===== (你写)=====
-        # 跑一句最轻的查询证明数据库是通的,通了就回 ready:
-        #   with get_engine().connect() as conn:
-        #       conn.execute(text("SELECT 1"))
-        #   return {"status": "ready"}
         with get_engine().connect() as conn:
             conn.execute(text("SELECT 1"))
         return {"status": "ready"}
@@ -179,11 +205,7 @@ def health_ready():
 class ChatRequest(BaseModel):
     """客户端 POST 过来的 JSON。"""
 
-    # ===== (你写)=====
-    # 给两个字段加【长度上限】(Field 声明"这个字段最长多少",防超长输入烧 token)。
-    # 把下面两行改成:
-    #   thread_id: str = Field(..., max_length=64)      # 会话ID,短; ... 表示必填
-    #   message: str = Field(..., max_length=2000)      # 用户消息,最长 2000 字
+    # 长度上限:防超长输入烧 token;422 由框架自动返回
     thread_id: str = Field(..., max_length=64)
     message: str = Field(..., max_length=2000)
 
@@ -411,6 +433,40 @@ def get_run_status(run_id: str, user_id: str = Depends(get_current_user)) -> dic
     }
 
 
+@app.get("/chat/runs/{run_id}/report.pdf")
+def download_run_report(run_id: str, user_id: str = Depends(get_current_user)):
+    """把一次运行导出成 PDF 报告。
+
+    为什么是接口而不是 agent 的工具:见 ruixue_app/report.py 的模块说明 ——
+    一句话是**工具要保持只读**,让 agent 能写文件会同时引入路径逃逸、
+    磁盘清理和"提示注入诱导写文件"三个新问题。
+
+    归属校验复用 runs.get_run(run_id, user_id):猜到别人的 run_id 也拿不到,
+    和查状态、重连走的是同一道门 —— 新开的下载口不另起一套鉴权。
+    """
+    row = runs.get_run(run_id, user_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="运行不存在")
+
+    data = report.ReportData(
+        run_id=row.run_id,
+        question=row.question,
+        answer=row.answer or "",
+        created_at=row.created_at,
+        status=row.status,
+    )
+    pdf = report.render_pdf(data)
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={
+            # filename 只含日期和 run_id 前 8 位,不拼用户提问 —— 见 report.filename_for
+            "Content-Disposition": f'attachment; filename="{report.filename_for(data)}"',
+            "Content-Length": str(len(pdf)),
+        },
+    )
+
+
 @app.get("/chat/runs/{run_id}/stream")
 def resume_run_stream(run_id: str, user_id: str = Depends(get_current_user)):
     """重连:从头补发该 Run 已产生的事件,并继续推后续的。"""
@@ -429,3 +485,75 @@ def resume_run_stream(run_id: str, user_id: str = Depends(get_current_user)):
             headers={"X-Accel-Buffering": "no"},
         )
     return _stream_run(run_id, from_start=True)
+
+
+# ── 实测数据上传与管理 ────────────────────────────────────────
+#
+# 为什么数据进 PG 而不是文件系统:见 persistence/models.DatasetRow 的说明 ——
+# 一句话是"不落盘就没有路径逃逸、没有清理、没有配额"。
+#
+# 为什么上传是【接口】而不是 agent 的工具:和 PDF 报告同一条 ——
+# 工具要保持只读。让 agent 能接收并落盘文件,等于给提示注入开一扇门。
+
+
+@app.post("/datasets")
+async def upload_dataset(
+    file: UploadFile = File(...),
+    user_id: str = Depends(get_current_user),
+) -> dict:
+    """上传一张实测数据表(CSV),返回数据集编号与概览。
+
+    体积闸门在【读进内存之前】就要判:先信任 Content-Length,读完再复核一次
+    实际大小 —— 只信任声明的长度等于让客户端自己决定能塞多少进来。
+    """
+    from ruixue_agent.analysis import DatasetError, load_csv, summarize
+    from ruixue_agent.analysis import store as ds_store
+    from ruixue_agent.analysis.loader import MAX_BYTES
+
+    declared = file.size or 0
+    if declared > MAX_BYTES:
+        raise HTTPException(status_code=413, detail=f"文件超过 {MAX_BYTES // 1024 // 1024}MB 上限")
+
+    raw = await file.read()
+    if len(raw) > MAX_BYTES:  # 复核:声明的长度不可信
+        raise HTTPException(status_code=413, detail=f"文件超过 {MAX_BYTES // 1024 // 1024}MB 上限")
+
+    try:
+        cm, rows = load_csv(raw)
+    except DatasetError as e:
+        # 422 而不是 500:这是用户的数据不合契约,不是我们的服务出错。
+        # detail 直接来自 DatasetError,那些消息本来就是写给用户看的。
+        raise HTTPException(status_code=422, detail=str(e)) from e
+
+    ds_id = ds_store.save(user_id, file.filename or "上传数据.csv", cm, rows)
+    logger.info("用户 %s 上传数据集 %s(%d 行)", user_id, ds_id, len(rows))
+    return {"dataset_id": ds_id, "filename": file.filename, **summarize(cm, rows)}
+
+
+@app.get("/datasets")
+def list_datasets(user_id: str = Depends(get_current_user)) -> dict:
+    """列出我的数据集(不含数据行 —— 列表页用不上,拉出来纯属浪费)。"""
+    from ruixue_agent.analysis import store as ds_store
+
+    return {
+        "datasets": [
+            {
+                "dataset_id": d.dataset_id,
+                "filename": d.filename,
+                "n_rows": d.n_rows,
+                "targets": sorted(d.targets),
+                "created_at": d.created_at.isoformat(),
+            }
+            for d in ds_store.list_for(user_id)
+        ]
+    }
+
+
+@app.delete("/datasets/{dataset_id}")
+def delete_dataset(dataset_id: str, user_id: str = Depends(get_current_user)) -> dict:
+    """删除我的数据集。不属于我的一律 404 —— 403 会泄露"这个 id 存在"。"""
+    from ruixue_agent.analysis import store as ds_store
+
+    if not ds_store.delete_one(dataset_id, user_id):
+        raise HTTPException(status_code=404, detail="数据集不存在")
+    return {"ok": True}
