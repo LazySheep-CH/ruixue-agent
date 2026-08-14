@@ -131,3 +131,8 @@ cd frontend && npm install && npm run dev      # 浏览器开 http://127.0.0.1:3
 
 Python 3.11 · PostgreSQL 17 · Milvus 2.6 · SQLAlchemy + Alembic ·
 sentence-transformers(bge)· jieba · uv
+
+## 版权
+
+本项目知识产权归**江苏省农业科学院农业设施与装备研究所**所有,保留所有权利;
+仅作展示交流,未经书面许可不得复制、分发或商用。详见 [COPYRIGHT](COPYRIGHT)。
