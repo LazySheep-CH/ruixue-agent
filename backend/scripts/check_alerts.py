@@ -7,8 +7,7 @@
 放进 cron(每 5 分钟一次):
     */5 * * * * cd /path/to/repo && uv run python scripts/check_alerts.py --webhook $ALERT_WEBHOOK
 
-## 为什么是脚本 + cron,而不是 Alertmanager
-
+为什么是脚本 + cron,而不是 Alertmanager:
 有指标没人看等于没有监控。补上"有人看"这一步有两条路:
 上一整套 Prometheus + Alertmanager(三个容器、三份配置、一套面板),
 或者一个读 /metrics 的脚本挂 cron。
@@ -17,14 +16,13 @@
 将来换成真 Alertmanager 时,应用侧一行都不用改**,只是把这个脚本扔掉。
 接口按标准来、实现先简陋,这是刻意的取舍。
 
-## 规则设计的两条纪律
-
-**① 每条规则要能说清"该做什么"。** 只报"失败率 30%"没有用,
+规则设计的两条纪律:
+1) 每条规则要能说清"该做什么"。 只报"失败率 30%"没有用,
 值班的人第一反应是"然后呢"。所以每条规则都带 `action` —— 直接告诉他先看哪儿。
 
-**② 不能在没有流量时报警。** 凌晨没人用,失败率分母是 0 ——
+2) 不能在没有流量时报警。 凌晨没人用,失败率分母是 0 ——
 写不好就会每天半夜报一次假警。假警报的真正代价不是吵醒人,
-是**让所有人开始忽略警报**,那时真出事也没人看。
+是让所有人开始忽略警报,那时真出事也没人看。
 """
 
 from __future__ import annotations
@@ -89,7 +87,7 @@ def evaluate(m: dict[str, float]) -> list[tuple[Rule, str]]:
     total = _get(m, "ruixue_runs_total_1h")
     ratio = _get(m, "ruixue_runs_failure_ratio_1h")
     # 至少要有 5 次运行才判失败率。1 次里失败 1 次 = 100%,那是噪声不是信号。
-    # 见模块说明纪律 ②:假警报会让人开始忽略警报。
+    # 见模块说明纪律 2):假警报会让人开始忽略警报。
     if total >= 5 and ratio >= 0.3:
         fired.append(
             (
@@ -205,7 +203,7 @@ def fetch(url: str, token: str) -> str:
 def notify(webhook: str, fired: list[tuple[Rule, str]]) -> None:
     """把告警 POST 出去。通用 JSON,飞书/Slack 的自定义机器人都能接。
 
-    发送失败只打印不抛 —— **告警通道挂了不该让检查脚本本身退出非零**,
+    发送失败只打印不抛 —— 告警通道挂了不该让检查脚本本身退出非零,
     否则 cron 会连告警都发不出来还没人知道。
     """
     worst = "critical" if any(r.level == "critical" for r, _ in fired) else "warning"

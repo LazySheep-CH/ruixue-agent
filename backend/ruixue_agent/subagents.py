@@ -1,6 +1,6 @@
 """子智能体(多 Agent 协作):把专项子任务【委派】给"专家"子 agent。
 
-核心思想(业界通行做法):**子 agent = 一个工具**。
+核心思想(业界通行做法):子 agent = 一个工具。
 主 agent(项目经理)不亲自干细活,而是通过一个 delegate 工具,把自包含的子任务
 派给某位专家(子 agent);专家用自己的【窄工具集 + 窄提示】独立完成,只把结论回给主 agent。
 
@@ -164,7 +164,7 @@ _ = estimate_film_usage
 
 @cache
 def _build_expert(name: str, model_name: str = "deepseek-v4-flash"):
-    """按注册表造一个专家子 agent。**构建一次,之后查缓存复用。**
+    """按注册表造一个专家子 agent。构建一次,之后查缓存复用。
 
     为什么要缓存:agent 图的编译 + 模型客户端创建,实测每次约 127ms ——
     没缓存时【每次派活都重付一遍】。deepagents 的 SubAgentMiddleware 也是

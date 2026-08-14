@@ -87,38 +87,38 @@ def create_ruixue_agent(
 def _build_middleware(summary_model_name: str, require_approval: bool) -> list:
     """中间件链:顺序即设计,不是随便排的(每条的理由见注释)。"""
     chain = [
-        # ⓪ 提示注入防护:放【最前】—— 安全检查要在花钱(摘要/调模型)之前做,
+        # 0) 提示注入防护:放【最前】—— 安全检查要在花钱(摘要/调模型)之前做,
         #    且要在最靠近用户输入的位置,后续中间件都在其保护之下。
         PromptInjectionGuardMiddleware(),
-        # ⓪.5 作业规程注入:按提问场景注入已验证的 SOP(skills/*.md),
+        # 0.5 作业规程注入:按提问场景注入已验证的 SOP(skills/*.md),
         #     告诉模型"这类问题该怎么做"。每条规程【一个会话只注入一次】,
         #     但不限定首轮 —— 限定首轮的话,"你好"开场就会让它永远等不到注入。
         SkillInjectionMiddleware(),
-        # ⓪.6 长期记忆注入:技能是"这类问题该怎么做"(对所有人一样),
+        # 0.6 长期记忆注入:技能是"这类问题该怎么做"(对所有人一样),
         #     记忆是"这个用户是谁"(因人而异)。两者都属于"开工前先给背景",
         #     所以挨着放。去重判据同样是"注入过没有",不是"第几轮"——
         #     记忆最该发挥作用的"还是上次那块地",几乎不会是第一句话。
         MemoryRecallMiddleware(),
-        # ① 死循环刹车:已经到上限就该立刻停,不能先花钱做摘要、再发现"哦该停了"。
+        # 1) 死循环刹车:已经到上限就该立刻停,不能先花钱做摘要、再发现"哦该停了"。
         ModelCallLimitMiddleware(
             run_limit=MAX_MODEL_CALLS_PER_RUN,
             thread_limit=MAX_MODEL_CALLS_PER_THREAD,
             exit_behavior="end",  # "end"=优雅收尾出答案;"error"=直接抛异常
         ),
-        # ② 上下文压缩:过了闸门就把老对话摘要成一段,替换掉原文。
+        # 2) 上下文压缩:过了闸门就把老对话摘要成一段,替换掉原文。
         #    放在模型调用【之前】,压完再发给模型,省的就是这次的钱。
         SummarizationMiddleware(
             model=create_model(summary_model_name),  # 用便宜模型干这活
             trigger=("tokens", SUMMARIZE_AT_TOKENS),
             keep=("messages", KEEP_RECENT_MESSAGES),
         ),
-        # ③ 模型调用重试:网络抖动、对方 503 —— 退避后重试,别让用户白跑一趟。
+        # 3) 模型调用重试:网络抖动、对方 503 —— 退避后重试,别让用户白跑一趟。
         #    jitter=True 是"随机抖动":避免所有失败请求在同一刻一起重试,
         #    那样等于自己给对方来一波脉冲(惊群),越重试越挂。
         ModelRetryMiddleware(max_retries=2, initial_delay=1.0, backoff_factor=2.0, jitter=True),
     ]
     if require_approval:
-        # ③.5 人工批准:在【工具执行前】暂停,等外部 resume。放在重试之后、
+        # 3.5 人工批准:在【工具执行前】暂停,等外部 resume。放在重试之后、
         #      计时之前 —— 等待人批准的时间不该被算进"工具耗时"。
         chain.append(
             HumanInTheLoopMiddleware(
@@ -127,9 +127,9 @@ def _build_middleware(summary_model_name: str, require_approval: bool) -> list:
             )
         )
     chain += [
-        # ④ 工具计时:放在错误处理【外层】,这样失败的调用也能被记进耗时日志。
+        # 4) 工具计时:放在错误处理【外层】,这样失败的调用也能被记进耗时日志。
         TimingLoggingMiddleware(),
-        # ⑤ 工具错误降级:最内层,离真正的工具执行最近,第一时间接住异常。
+        # 5) 工具错误降级:最内层,离真正的工具执行最近,第一时间接住异常。
         ToolErrorHandlingMiddleware(),
     ]
     return chain

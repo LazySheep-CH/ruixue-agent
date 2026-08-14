@@ -1,13 +1,11 @@
 """数据集的存取。归属校验是这一层的核心职责,不是可选项。
 
-## 每个读取入口都必须带 user_id
-
-和 `runs.get_run` 同一条规矩:**猜到 dataset_id 就能看别人的数据 = 数据泄露**。
+每个读取入口都必须带 user_id:
+和 `runs.get_run` 同一条规矩:猜到 dataset_id 就能看别人的数据 = 数据泄露。
 所以这里不提供"按 id 取"的裸接口 —— 只有 `get(dataset_id, user_id)`。
 少一个参数的便利,换来的是一个随时可能被误用的越权入口。
 
-## dataset_id 用 uuid,不用自增
-
+dataset_id 用 uuid,不用自增:
 自增 id 可枚举:知道自己的是 7,就能去试 8。uuid 猜不出来。
 这一条和 `runs` 一致 —— 对外暴露的标识符一律不可枚举。
 """
@@ -73,7 +71,7 @@ def save(user_id: str, filename: str, cm: ColumnMap, rows: list[dict]) -> str:
             DatasetRow(
                 dataset_id=ds_id,
                 user_id=user_id,
-                # 只作展示。**不用它拼路径**(不落盘)、也不进 HTTP 头 ——
+                # 只作展示。不用它拼路径(不落盘)、也不进 HTTP 头 ——
                 # 和 report.filename_for 同一条:不可信输入不进这两个地方。
                 filename=filename[:255],
                 n_rows=len(rows),
@@ -116,7 +114,7 @@ def _prune(s: Session, user_id: str) -> int:
 
 
 def get(dataset_id: str, user_id: str) -> Dataset | None:
-    """取一份数据集。**user_id 不匹配就当作不存在** —— 返回 None 而不是抛权限错误。
+    """取一份数据集。user_id 不匹配就当作不存在 —— 返回 None 而不是抛权限错误。
 
     返回 404 而非 403 是刻意的:403 等于告诉对方"这个 id 存在",
     是一个可枚举的信息泄露。和 runs.get_run 保持一致。

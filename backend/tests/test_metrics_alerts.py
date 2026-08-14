@@ -1,8 +1,8 @@
 """指标与告警的测试。
 
-监控这层有个特有的失败模式:**它自己变成故障源**。
+监控这层有个特有的失败模式:它自己变成故障源。
 数据库抖一下 /metrics 返回 500,监控系统就认为服务挂了 —— 而服务好好的。
-所以这里盯三件事:格式合规、部分失败不整体崩、以及**不许发假警报**。
+所以这里盯三件事:格式合规、部分失败不整体崩、以及不许发假警报。
 
 假警报的真正代价不是吵醒人,是让所有人开始忽略警报 —— 那时真出事也没人看。
 """
@@ -37,7 +37,7 @@ def _rendered(monkeypatch) -> str:
 def test_help_and_type_never_carry_labels(monkeypatch):
     """`# HELP name{label="x"}` 是非法的 —— 解析器会拒绝。
 
-    这类错误肉眼读输出完全正常,**只有真接上采集器才会暴露**。
+    这类错误肉眼读输出完全正常,只有真接上采集器才会暴露。
     """
     for line in _rendered(monkeypatch).splitlines():
         if line.startswith("#"):
@@ -108,7 +108,7 @@ def test_no_alert_when_everything_is_fine():
 
 @pytest.mark.parametrize("total,ratio", [(0, 0.0), (1, 1.0), (4, 1.0)])
 def test_tiny_traffic_never_triggers_failure_alert(total, ratio):
-    """**这条是防假警报的核心。**
+    """这条是防假警报的核心。
 
     凌晨没人用,1 次运行失败 1 次 = 100% 失败率。按比例报警就会每天半夜
     响一次假警 —— 而假警报的代价是让人开始忽略所有警报。

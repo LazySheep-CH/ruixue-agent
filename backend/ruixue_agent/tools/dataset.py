@@ -1,15 +1,14 @@
 """数据集分析工具:让 agent 能分析用户上传的实测数据。
 
-## dataset_id 从哪来 —— 以及为什么这很重要
-
-工具只接收一个 **uuid 形式的 dataset_id**,它由上传接口返回、由前端带进对话。
+dataset_id 从哪来 —— 以及为什么这很重要:
+工具只接收一个 uuid 形式的 dataset_id,它由上传接口返回、由前端带进对话。
 两个后果:
 
-- **模型编不出别人的 id**(uuid 不可枚举),而且取数时还要再校验一次 user_id;
-- 工具**不碰文件系统** —— 数据在 PG 里,没有路径、没有清理、没有配额问题。
+- 模型编不出别人的 id(uuid 不可枚举),而且取数时还要再校验一次 user_id;
+- 工具不碰文件系统 —— 数据在 PG 里,没有路径、没有清理、没有配额问题。
 
 user_id 同样不由模型提供:它从 thread_id 前缀解析(和记忆注入同一套),
-**模型说自己是谁一律不可信**。
+模型说自己是谁一律不可信。
 """
 
 from __future__ import annotations
@@ -26,7 +25,7 @@ logger = logging.getLogger("ruixue.tools.dataset")
 def _load(dataset_id: str):
     """按 id + 当前用户取数据集。取不到统一返回一句人话,不抛。
 
-    user_id 从运行配置里解析(thread_id 形如 "alice:t1"),**不接受模型传参** ——
+    user_id 从运行配置里解析(thread_id 形如 "alice:t1"),不接受模型传参 ——
     否则模型只要说"我是 alice"就能读别人的数据。
     """
     from ruixue_agent.agents.middlewares import _user_id_from

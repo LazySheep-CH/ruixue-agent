@@ -6,8 +6,8 @@
 后续加列的变更被静默忽略,各环境的库结构会逐渐不一致。
 
 autogenerate 之后需手工补两处:
-  ① sqlalchemy.dialects.postgresql 的 import(生成代码引用了 TSVECTOR 却缺 import)
-  ② 触发器:Alembic 只比对表结构,不管理数据库函数与触发器
+  1) sqlalchemy.dialects.postgresql 的 import(生成代码引用了 TSVECTOR 却缺 import)
+  2) 触发器:Alembic 只比对表结构,不管理数据库函数与触发器
 
 COMMENT ON 一律写在 models.py 的 comment= 上由 autogenerate 生成,不在此手写:
 模型未声明的注释会被 alembic check 判定为漂移并要求删除。
@@ -148,7 +148,7 @@ def upgrade() -> None:
 
     # ── 以下为手工补充(Alembic 不管理触发器)──
 
-    # ① updated_at 自动更新触发器
+    # 1) updated_at 自动更新触发器
     #
     # 为什么必须在【数据库】做,而不是在 Python 里写 doc.updated_at = now():
     #   写库的路径有很多条(管道、修数据的脚本、DBA 手工 UPDATE、以后的 Web 后台)。
@@ -174,12 +174,12 @@ def upgrade() -> None:
         """
     )
 
-    # ② text_tsv 自动维护触发器(为 BM25 混合检索铺路)
+    # 2) text_tsv 自动维护触发器(为 BM25 混合检索铺路)
     #
     # tsvector = PG 预先把文本切成词 + 记住词的位置,存成一列。
     # 查询时走 GIN 索引直接查它,不用扫全表。
     #
-    # ⚠ 'simple' 配置 = 只按空格/标点切,【不做中文分词】。
+    # 注意:'simple' 配置 = 只按空格/标点切,【不做中文分词】。
     #   中文没空格 → "地膜降解性能好" 会被当成一整个词 → 搜 "降解" 搜不到。
     #   正解是装 zhparser / pg_jieba 扩展(要改 Docker 镜像,重建索引)。
     #   先用 simple 打地基:英文术语(PBAT/PLA/ASTM)和数字型号已经能精确匹配,

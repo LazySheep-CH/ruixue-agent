@@ -110,7 +110,7 @@ def _rate_key(request: Request) -> str:
     return request.headers.get("X-API-Key") or get_remote_address(request)
 
 
-# 计数存哪里:**必须是跨进程共享的**。
+# 计数存哪里:必须是跨进程共享的。
 # 上线一般起多个 worker(uvicorn --workers N),若计数各存各的内存,
 # N 个 worker 就等于限额 ×N —— 限流形同虚设。故用 Redis 做共享存储。
 # 没配 REDIS_URL 时退回内存(仅适合单 worker 的本地开发),并明确告警。
@@ -168,10 +168,9 @@ def health():
 def prometheus_metrics(user_id: str = Depends(get_current_user)) -> Response:
     """运行指标(Prometheus 文本格式)。
 
-    ## 为什么要鉴权
-
+    为什么要鉴权:
     这些指标会告诉外人:我们有多少用户在用、失败率多少、容量上限是多少、
-    哪个依赖挂了。**对攻击者来说这是一张现成的作战地图** ——
+    哪个依赖挂了。对攻击者来说这是一张现成的作战地图 ——
     知道容量上限就知道打多少并发能把你压垮,知道失败率就知道什么时候值得再试。
 
     Prometheus 支持在 scrape 配置里带 header,所以加鉴权不影响接入:
@@ -438,7 +437,7 @@ def download_run_report(run_id: str, user_id: str = Depends(get_current_user)):
     """把一次运行导出成 PDF 报告。
 
     为什么是接口而不是 agent 的工具:见 ruixue_app/report.py 的模块说明 ——
-    一句话是**工具要保持只读**,让 agent 能写文件会同时引入路径逃逸、
+    一句话是工具要保持只读,让 agent 能写文件会同时引入路径逃逸、
     磁盘清理和"提示注入诱导写文件"三个新问题。
 
     归属校验复用 runs.get_run(run_id, user_id):猜到别人的 run_id 也拿不到,
