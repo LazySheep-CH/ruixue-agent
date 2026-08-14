@@ -73,3 +73,9 @@ runs/
 # ── 个人材料:面试/简历文档永不入库(2026-08-14,曾被推上公开仓库)──
 docs/面试*
 docs/简历*
+# 学习演示脚本,不属于产品代码
+scripts/study/
+# 本地产物与外部工具目录,不入库
+outputs/
+.impeccable/
+design-system/
