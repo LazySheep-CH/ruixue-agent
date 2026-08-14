@@ -155,7 +155,7 @@ def main() -> int:
     rec = Report()
     current: dict = {}
 
-    # 只改【本次实验】用的那个中间件实例的阈值,不动 builder 里的常量 ——
+    # 只改本次实验用的那个中间件实例的阈值,不动 builder 里的常量 ——
     # 生产配置该由数据来改,不该被一个实验脚本顺手改掉。
     threshold = args.threshold or SUMMARIZE_AT_TOKENS
 
@@ -197,7 +197,7 @@ def main() -> int:
                         mw.max_tokens_before_summary = args.threshold
         tid = f"ctxeval:{uuid.uuid4().hex[:8]}"  # 同一个 thread —— 上下文必须累积
         print(f"上下文实验:同一会话连问 {args.turns} 轮")
-        # 注意:表头必须反映【实际生效】的参数,不能打印常量 ——
+        # 注意:表头必须反映实际生效的参数,不能打印常量 ——
         #   否则用 --keep 6 跑出来的报告上写着"保留 20 条",
         #   过两周回看这份结果会完全误读。踩过一次。
         keep = args.keep or KEEP_RECENT_MESSAGES

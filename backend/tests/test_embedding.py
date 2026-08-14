@@ -14,7 +14,7 @@ import pytest
 
 from ruixue_agent.rag.embedding import embed
 
-# 这几条要【真加载模型】(会下载 ~100MB),本地默认跑,但 CI 快速通道跳过:
+# 这几条要真加载模型(会下载 ~100MB),本地默认跑,但 CI 快速通道跳过:
 # CI 里设了环境变量 SKIP_MODEL_TESTS=1 就整文件跳过,避免每次 CI 下大模型。
 pytestmark = pytest.mark.skipif(
     os.getenv("SKIP_MODEL_TESTS") == "1",

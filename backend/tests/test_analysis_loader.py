@@ -61,7 +61,7 @@ def test_target_aliases_cover_common_wordings():
 
 def test_utf8_bom_does_not_break_the_first_header():
     """Excel 导出的 UTF-8 CSV 常带 BOM。不剥掉,第一个列名变成 "﻿PLA含量",
-    归一认不出 —— 而且【不报错】,只是少认一列。"""
+    归一认不出 —— 而且不报错,只是少认一列。"""
     cm, rows = load_csv(_csv(_GOOD, "utf-8-sig"))
     assert "PLA_pct" in cm.features
     assert rows[0]["PLA_pct"] == 30.0
@@ -105,7 +105,7 @@ def test_messy_numbers_are_parsed(cell, expected):
 
 @pytest.mark.parametrize("cell", ["", "  ", "—", "N/A", "无", "未测", "高", "偏酸", "见备注"])
 def test_non_numeric_becomes_missing_not_zero(cell):
-    """描述性文字是【真缺失】,不能硬编成 0 —— 0 会被当成一个真实测量值,
+    """描述性文字是真缺失,不能硬编成 0 —— 0 会被当成一个真实测量值,
     把均值和预测全部拉偏,而且不报错。"""
     assert parse_number(cell) is None
 

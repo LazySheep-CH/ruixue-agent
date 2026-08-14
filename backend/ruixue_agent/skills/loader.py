@@ -1,4 +1,4 @@
-"""技能(skills):把【已验证的操作流程 SOP】沉淀成 Markdown,按需加载给 agent。
+"""技能(skills):把已验证的操作流程 SOP沉淀成 Markdown,按需加载给 agent。
 
 技能 vs 工具:
     工具 = 一个原子动作(查土壤、跑模型、检索知识)
@@ -68,13 +68,13 @@ def select_skills(user_text: str, limit: int = 2) -> list[Skill]:
 
 
 # 每条技能在上下文里的标题格式。中间件靠它判断"这条之前注入过没有",
-# 所以它是【约定好的标记】,不能随手改 —— 改了要同步改 SKILL_HEADER_RE。
+# 所以它是约定好的标记,不能随手改 —— 改了要同步改 SKILL_HEADER_RE。
 SKILL_HEADER = "【作业规程:{name}】"
 SKILL_HEADER_RE = re.compile(r"【作业规程:(.+?)】")
 
 
 def render(skills: list[Skill]) -> str:
-    """把【给定的】技能渲染成可注入上下文的文本;空列表返回空串。
+    """把给定的技能渲染成可注入上下文的文本;空列表返回空串。
 
     和 render_skills 的区别:这个函数不负责挑选,由调用方决定注入哪几条 ——
     中间件需要"挑出匹配的,再剔掉已经注入过的",所以挑选和渲染必须能分开。

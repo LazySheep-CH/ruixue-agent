@@ -117,7 +117,7 @@ def test_register_login_and_me():
 
 @needs_db
 def test_unknown_user_and_wrong_password_same_message():
-    """【安全】用户名不存在与密码错误必须返回同一句话,否则可枚举用户名。"""
+    """安全用户名不存在与密码错误必须返回同一句话,否则可枚举用户名。"""
     a = client.post("/auth/login", json={"username": "nosuchuser999", "password": "whatever1"})
     name = _username()
     client.post("/auth/register", json={"username": name, "password": "ruixue123"})

@@ -1,6 +1,6 @@
 """README 的指标必须与最近一次标准评测跑出的基线一致。
 
-【这个测试为什么存在】
+这个测试为什么存在
 2026-08-11 发现 README 的检索指标已经错了很久:
     README 写 R@1 0.807 / R@10 0.953 / MRR 0.866
     实测(338 题多标注)0.769 / 0.979 / 0.849
@@ -18,7 +18,7 @@ R@5(0.952)被抄到了 R@10 那一栏——错位抄写没有任何机制能发�
 决定哪个数才算数"。测试红的时候有两种可能:文档过期了,或者这次跑法不标准。
 这个判断必须由人做。
 
-【没有基线文件时怎么办】
+没有基线文件时怎么办
 skip,不 fail。基线要跑真实评测才有(需要 PG + Milvus + 26 万向量),
 CI 和新克隆的仓库里不该因为"没跑过评测"就红。
 它防的是跑过之后忘记同步文档,不是强制每个人都跑评测。
@@ -33,7 +33,7 @@ from pathlib import Path
 import pytest
 
 BACKEND = Path(__file__).resolve().parent.parent
-# README 在【仓库根】(项目门面),基线数据在 backend/data 下 —— 两个锚不同
+# README 在仓库根(项目门面),基线数据在 backend/data 下 —— 两个锚不同
 README = BACKEND.parent / "README.md"
 BASELINE = BACKEND / "data" / "eval" / "baselines" / "retrieval_latest.json"
 
@@ -55,7 +55,7 @@ def _load_baseline() -> dict:
 def _readme_numbers() -> set[str]:
     """README 里出现的所有三位小数,如 '0.769'。
 
-    只做【存在性】检查而不解析表格结构:表格排版随时会改(加一列、换措辞),
+    只做存在性检查而不解析表格结构:表格排版随时会改(加一列、换措辞),
     解析结构的测试会因为无关改动天天红,那样的测试很快就会被人加 skip 绕过。
     存在性检查弱一些,但它精确命中我们真正要防的那件事——
     README 里出现了一个基线里根本没有的数。
@@ -83,7 +83,7 @@ def test_readme_reports_online_pipeline_metrics():
 def test_readme_ablation_chain_matches_baseline():
     """逐层增益链(纯向量 → 混合 → 重排)也要对得上。
 
-    单独一条 case:这三个数最容易【只改了最后一个】。
+    单独一条 case:这三个数最容易只改了最后一个。
     2026-08-11 那次就是三个数全错,但如果只测最终值就只能发现一个。
     """
     layers = _load_baseline()["layers"]

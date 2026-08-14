@@ -19,7 +19,7 @@ _HAS_MODELS = (MODEL_STORE / "DR" / "DR_model.joblib").exists()
 
 # ── 专家注册(不依赖模型)────────────────────────────────────
 def test_recipe_expert_registered_with_batch_tool():
-    """配方优化专家应拿到【批量试算】工具,而不是逐个预测工具 —— 少转 LLM 循环。"""
+    """配方优化专家应拿到批量试算工具,而不是逐个预测工具 —— 少转 LLM 循环。"""
     names = [t.name for t in sub._EXPERTS["配方优化专家"]["tools"]]
     assert "screen_film_recipes" in names
     assert "predict_degradation" not in names  # 给单项工具会导致逐个试、转很多圈

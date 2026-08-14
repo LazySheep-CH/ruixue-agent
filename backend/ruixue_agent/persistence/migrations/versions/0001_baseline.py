@@ -1,6 +1,6 @@
 """baseline: documents + chunks 两张表
 
-表结构的【第一个版本】。以后每次改结构 = 新增一个 migration 文件,
+表结构的第一个版本。以后每次改结构 = 新增一个 migration 文件,
 串成 0001 → 0002 → … 的链条;数据库里的 alembic_version 表记着当前在哪一版。
 手写 CREATE TABLE IF NOT EXISTS 做不到这一点:遇到已存在的表直接跳过,
 后续加列的变更被静默忽略,各环境的库结构会逐渐不一致。
@@ -150,7 +150,7 @@ def upgrade() -> None:
 
     # 1) updated_at 自动更新触发器
     #
-    # 为什么必须在【数据库】做,而不是在 Python 里写 doc.updated_at = now():
+    # 为什么必须在数据库做,而不是在 Python 里写 doc.updated_at = now():
     #   写库的路径有很多条(管道、修数据的脚本、DBA 手工 UPDATE、以后的 Web 后台)。
     #   靠每条路径自觉赋值迟早有遗漏,且遗漏不报错,数据只是静默出错。
     #   触发器在数据库层,任何路径的 UPDATE 都躲不掉。
@@ -179,7 +179,7 @@ def upgrade() -> None:
     # tsvector = PG 预先把文本切成词 + 记住词的位置,存成一列。
     # 查询时走 GIN 索引直接查它,不用扫全表。
     #
-    # 注意:'simple' 配置 = 只按空格/标点切,【不做中文分词】。
+    # 注意:'simple' 配置 = 只按空格/标点切,不做中文分词。
     #   中文没空格 → "地膜降解性能好" 会被当成一整个词 → 搜 "降解" 搜不到。
     #   正解是装 zhparser / pg_jieba 扩展(要改 Docker 镜像,重建索引)。
     #   先用 simple 打地基:英文术语(PBAT/PLA/ASTM)和数字型号已经能精确匹配,

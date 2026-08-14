@@ -1,7 +1,7 @@
 """中文分词列:text_tokens,词法检索的前置条件
 
 问题:0001 里 text_tsv 是 to_tsvector('simple', text) 生成的,而 simple 配置
-      靠【空格】切词。中文没空格 → 整句变成一个 token。实测:
+      靠空格切词。中文没空格 → 整句变成一个 token。实测:
           to_tsvector('simple','地膜厚度应不小于0.010mm')
             → '地膜厚度应不小于0.010mm':1      ← 一整坨
           搜「地膜厚度」false / 「厚度」false / 「PBAT」false / 「0.010」false

@@ -1,6 +1,6 @@
 """子智能体(多 Agent)测试:验证委派机制,不花钱、不连库。
 
-手法:用 monkeypatch 把 subagents 里的 create_model 换成【假模型】,
+手法:用 monkeypatch 把 subagents 里的 create_model 换成假模型,
 这样专家子 agent 用的就是我们能精确控制"说什么"的假模型。
 再单独给主 agent 一个假模型,让它"决定派活"。整条链就能在毫秒级跑通。
 """
@@ -74,7 +74,7 @@ def test_lead_agent_delegates_to_expert(monkeypatch):
     assert "性能良好" in messages[-1].content
 
 
-# ── 安全:专家的工具集里【不含】delegate,防止无限递归派活 ──────
+# ── 安全:专家的工具集里不含delegate,防止无限递归派活 ──────
 def test_expert_cannot_delegate_further():
     """专家不能再派活 —— 这是防递归的关键设计,用测试锁死。"""
     for name, spec in sub._EXPERTS.items():
@@ -84,7 +84,7 @@ def test_expert_cannot_delegate_further():
 
 # ── 子 agent 可观测性 ────────────────────────────────────────────
 def test_subagent_tokens_and_inner_tools_are_collected():
-    """子 agent 的消息不进父状态,所以它烧的 token 原本【一分钱不算】,
+    """子 agent 的消息不进父状态,所以它烧的 token 原本一分钱不算,
     内部调了什么工具也完全是黑箱。发生委派时成本统计就偏低,而版本对比正是拿它比的。"""
     from unittest.mock import patch
 
@@ -157,7 +157,7 @@ def test_failed_delegation_is_also_recorded():
     assert len(runs) == 1 and runs[0].ok is False and runs[0].error == "RuntimeError"
 
 
-# ── 故障诊断专家:工具集是【设计决策】,不是随手配的 ────────────
+# ── 故障诊断专家:工具集是设计决策,不是随手配的 ────────────
 
 
 def test_diagnosis_expert_is_registered_and_routable():
@@ -174,7 +174,7 @@ def test_diagnosis_expert_is_registered_and_routable():
 
 
 def test_diagnosis_expert_has_the_baseline_tool():
-    """诊断的第一步是"该配方在当地【本该】表现如何" —— 没有基准就无法判断偏差。
+    """诊断的第一步是"该配方在当地本该表现如何" —— 没有基准就无法判断偏差。
 
     predict_by_location 是这条方法论的地基,少了它,专家只能凭常识猜。
     """
@@ -185,7 +185,7 @@ def test_diagnosis_expert_has_the_baseline_tool():
 def test_diagnosis_expert_deliberately_lacks_recipe_screening():
     """刻意不给 screen_film_recipes —— 这条容易被后人"顺手补上"。
 
-    诊断是【找原因】,选型是【给方案】。给了筛选工具,模型会跳过排查直接
+    诊断是找原因,选型是给方案。给了筛选工具,模型会跳过排查直接
     推荐新配方 —— 而用户想知道的是"这次为什么坏了"。实测两个案例都在
     第一步就算基准、并据此判断"是产品预期不匹配还是真异常",
     有了筛选工具这条路径大概率会被抄近道绕过。

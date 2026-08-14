@@ -17,7 +17,7 @@ from ruixue_agent.persistence.engine import database_url
 @lru_cache(maxsize=1)
 def get_checkpointer() -> PostgresSaver:
     """全进程共用一个 PG checkpointer(内含连接池)。首次会建好 checkpoint 表。"""
-    # PostgresSaver 用 psycopg 直连(不走 SQLAlchemy),要【纯 psycopg 连接串】:
+    # PostgresSaver 用 psycopg 直连(不走 SQLAlchemy),要纯 psycopg 连接串:
     # 去掉 SQLAlchemy 的方言后缀 "+psycopg"。
     conn_string = database_url().replace("postgresql+psycopg://", "postgresql://")
 

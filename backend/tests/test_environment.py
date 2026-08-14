@@ -73,7 +73,7 @@ def test_climate_and_uv_calibration(place, days):
     assert f["UV"] / (UV_PER_UVA_MJ * days) < 5  # 反推的日 UVA 应是个位数 MJ
 
 
-# ── 土壤/气候作为【独立工具】暴露 ──────────────────────────────
+# ── 土壤/气候作为独立工具暴露 ──────────────────────────────
 def test_soil_and_climate_tools_registered():
     names = [t.name for t in get_tools()]
     assert "get_soil_info" in names and "get_climate_info" in names

@@ -1,6 +1,6 @@
 """长期记忆的测试。
 
-重点不在"能存能取",而在几条【错了会出事】的边界:
+重点不在"能存能取",而在几条错了会出事的边界:
 用户隔离(错了是数据泄露)、幂等(错了会越存越多)、
 软删不复活(错了用户会觉得"我删了它还记得")、失败不拖垮主流程。
 """
@@ -34,7 +34,7 @@ def _deps_up() -> bool:
 
 
 def test_strip_fence_handles_json_code_block():
-    """模型爱把 JSON 包在 ```json 里。不剥掉解析就失败,而失败是【静默】的
+    """模型爱把 JSON 包在 ```json 里。不剥掉解析就失败,而失败是静默的
     (被 except 吞掉),表现为"记忆功能好像没生效",极难查。"""
     assert _strip_fence('```json\n{"facts": []}\n```') == '{"facts": []}'
     assert _strip_fence('{"facts": []}') == '{"facts": []}'
@@ -53,7 +53,7 @@ def test_strip_fence_handles_json_code_block():
     ],
 )
 def test_strip_fence_survives_model_pleasantries(raw):
-    """旧写法是 `if s.startswith("```")`,只认【整段以代码块开头】。
+    """旧写法是 `if s.startswith("```")`,只认整段以代码块开头。
 
     模型很常见地先客气一句再给代码块,这时判断不成立 → 整段送进 json.loads
     → 报错 → 被 except 吞掉 → 这轮记忆静默丢失。2026-08-08 实测七种形态里
@@ -64,7 +64,7 @@ def test_strip_fence_survives_model_pleasantries(raw):
 
 def test_extract_returns_empty_on_model_failure(monkeypatch):
     """抽取失败必须返回空,而不是抛异常 —— 记忆是锦上添花,
-    绝不能因为它让一次【已经成功】的回答看起来像失败。"""
+    绝不能因为它让一次已经成功的回答看起来像失败。"""
     import ruixue_agent.memory.extract as ex
 
     def boom(*a, **k):
@@ -87,7 +87,7 @@ pytestmark_db = pytest.mark.skipif(not _deps_up(), reason="需要 PostgreSQL")
 def test_user_isolation_is_enforced_in_pg_too():
     """召回必须双重校验归属:Milvus 侧过滤 + PG 侧再查一次。
 
-    只靠一层的话,任何一层的过滤写错都会【召回别人的记忆】——
+    只靠一层的话,任何一层的过滤写错都会召回别人的记忆——
     这不是效果问题,是数据泄露。
     """
     from ruixue_agent.memory import recall, remember
@@ -240,7 +240,7 @@ def test_memory_not_injected_twice_in_one_session():
 
 
 def test_no_user_id_means_no_memory_at_all():
-    """拿不到身份时【一条都不给】。
+    """拿不到身份时一条都不给。
 
     若图省事写成 user_id or "default",所有匿名请求就共用一份记忆 ——
     张三上午说的话,李四下午就看见了。宁可不给,不可给错人。

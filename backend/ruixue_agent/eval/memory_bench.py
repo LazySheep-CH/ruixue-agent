@@ -74,7 +74,7 @@ class BenchReport:
             "on_rate": on_rate,
             "delta": on_rate - off_rate,
             "errors": sum(1 for r in self.on + self.off if r.error),
-            # 没存进任何事实的题 —— 这类题的收益必然是 0,但原因在【抽取】不在【召回】,
+            # 没存进任何事实的题 —— 这类题的收益必然是 0,但原因在抽取不在召回,
             # 混进总分会让人以为"记忆没用",实际是"根本没记住"。必须单列。
             "no_fact_stored": sum(1 for r in self.on if r.stored == 0 and not r.error),
             # 存了却没进上下文 —— 第三种病:抽取对了、召回或注入断了。
@@ -83,7 +83,7 @@ class BenchReport:
                 1 for r in self.on if r.stored and not r.injected and not r.error
             ),
             "injected": sum(1 for r in self.on if r.injected and not r.error),
-            # 反问率:诊断用,【不进总分】。反问不一定是失败 ——
+            # 反问率:诊断用,不进总分。反问不一定是失败 ——
             # 问一个记忆里从来没有的信息(如 m06 的地点)是正确行为。
             "on_asked_back": sum(1 for r in self.on if r.asked_back and not r.error),
             "off_asked_back": sum(1 for r in self.off if r.asked_back and not r.error),
@@ -107,7 +107,7 @@ def _wait_visible(recall_fn, user_id: str, query: str) -> float:
 
 
 def _kp_used(kp: KeyPoint, turn: Turn) -> bool:
-    """要点是否【真的被用上】。
+    """要点是否真的被用上。
 
     数值要点:只认工具调用参数,不看正文(判据 v3):
     正文里的数字分不清是"用上了"还是"举例说明":
@@ -275,7 +275,7 @@ def run_arm(agent, case: MemoryCase, with_memory: bool, run_tag: str = "") -> Ar
         #
         # 实测:Milvus 写入后到能被搜到,延迟 0.12s ~ 11.43s(三次采样,抖动极大)——
         # 向量插入要等一次 flush 才进可搜索段。不等的话,probe 轮召回为空,
-        # 测出来的是【Milvus 的刷盘时机】,不是【记忆的价值】。
+        # 测出来的是Milvus 的刷盘时机,不是记忆的价值。
         #
         # 只在 on 组等:off 组的 recall 被打成返回空,等多久都一样。
         if with_memory and res.stored:
@@ -298,14 +298,14 @@ def run_arm(agent, case: MemoryCase, with_memory: bool, run_tag: str = "") -> Ar
             (hit if _kp_used(kp, turn) else missed).append(label)
         res.hit, res.missed = tuple(hit), tuple(missed)
 
-        # 【判据 v3,2026-08-12】只看"要点有没有被用上",反问【不】单独致命。
+        # 判据 v3,2026-08-12只看"要点有没有被用上",反问不单独致命。
         #
         # v2 加过"反问即失败",实测太粗:m07 明明完美用上了记忆
         # (「结合您的实际情况:春季风大、地膜曾被吹烂」,要点全中),
         # 只因正文里有个问号就被判失败 —— 这次是压低 on 组,方向反了。
         #
         # 而且"反问"本身不一定是失败:m06 用上了偏好(保墒),但还要问地点
-        # ——地点从来就不在记忆里,问它是【正确行为】。
+        # ——地点从来就不在记忆里,问它是正确行为。
         #
         # 防"举例命中"这件事,交给 _kp_used 的结构性判据(数值只认工具参数),
         # 不再靠反问这条粗规则兜。反问率单独作为诊断指标报出来,不进总分。

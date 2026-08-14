@@ -22,8 +22,8 @@ def test_readiness_returns_503_when_db_down(monkeypatch):
     """核心:数据库挂了,就绪探针必须回 503(而不是 500,也不是假装 ready)。
 
     我们不真去关数据库,而是用 monkeypatch 把 get_engine 换成一个"一调用就抛异常"
-    的替身 —— 等价于"数据库连不上"。这样失败路径能【确定性】地测到,不靠运气。
-    注意:被替换的是它【被查找的地方】ruixue_agent.persistence.engine.get_engine
+    的替身 —— 等价于"数据库连不上"。这样失败路径能确定性地测到,不靠运气。
+    注意:被替换的是它被查找的地方ruixue_agent.persistence.engine.get_engine
     (就绪探针里就是从那儿 import 的)。
     """
 

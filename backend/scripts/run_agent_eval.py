@@ -12,14 +12,14 @@
     uv run python scripts/run_agent_eval.py --only injection   # 只跑某一类(快速验证)
     uv run python scripts/run_agent_eval.py --dry-run          # 只校验评测集,不调模型
 
-注意:这个脚本【会真的调大模型花钱】。33 题一轮大约几分钟。
+注意:这个脚本会真的调大模型花钱。33 题一轮大约几分钟。
    要在 CI 里跑的确定性部分在 tests/test_agent_eval.py,那部分不花钱。
 
 怎么用它做版本对比(这才是评测的意义):
     1. 改动前:--repeat 3 跑三轮,记下噪声地板(同版本自己抖多少)
     2. 存一份基线:结果自动落在 runs/agent_eval_<时间戳>.json
     3. 改动后:--baseline <那份基线> 再跑
-    4. 看输出的判定 —— 差异没超过噪声地板,就【不要】声称有提升
+    4. 看输出的判定 —— 差异没超过噪声地板,就不要声称有提升
 
 第 1 步最容易被省掉,但省掉它,后面所有对比都没有意义。
 """
@@ -37,7 +37,7 @@ from ruixue_agent.eval import report as rp
 from ruixue_agent.eval.runner import build_eval_agent, run_all
 from ruixue_agent.eval.schema import load_cases
 
-# 默认跑能力评测集。安全评测集(security_evalset.jsonl)是【另一把尺子】——
+# 默认跑能力评测集。安全评测集(security_evalset.jsonl)是另一把尺子——
 # 主集冻结不动,安全场景需要持续扩充,混在一起会让基线不断失效。
 EVAL = Path("data/eval/agent_evalset.jsonl")
 RUNS = Path("runs")
@@ -58,10 +58,10 @@ def _progress(i, n, case, score):
 
 
 def _rescore(cases, paths: list[Path], baseline=None) -> int:
-    """用【当前的判分逻辑】重判一份已存的轨迹,不调模型。
+    """用当前的判分逻辑重判一份已存的轨迹,不调模型。
 
     为什么这是个一等操作:判分规则改了之后,历史分数就不可比了 ——
-    但历史【轨迹】还是有效的(agent 当时确实那么做了)。重判而不是重跑,
+    但历史轨迹还是有效的(agent 当时确实那么做了)。重判而不是重跑,
     既省钱又能得到真正可比的数字。
 
     实测价值:首轮报 78.8%,修掉判分 bug 后同一批轨迹重判是 97.0% ——
@@ -128,7 +128,7 @@ def _rescore_one(cases, path: Path):
 
 
 def _print_comparison(baseline_paths, cur_reports, cats: dict[str, str], floor: float) -> None:
-    """基线和本次都用【多数票共识】做配对比较。
+    """基线和本次都用多数票共识做配对比较。
 
     为什么两边都要共识:单轮自己就抖(实测温度 0 下极差仍 6.1%)。拿单轮当基线,
     等于用会晃的尺子量另一把会晃的尺子,而且很容易不自觉挑一轮好看的当基线。
@@ -207,7 +207,7 @@ def main() -> int:
         print(rp.render(rep, f"第 {r} 轮" if args.repeat > 1 else "Agent 评测"))
         last = (rep, scores, traces)
 
-        # 【每轮都存】,不是只存最后一轮。
+        # 每轮都存,不是只存最后一轮。
         #
         # 多轮跑的目的就是找摇摆的题,而一道题为什么摇摆,只能靠【对照它在
         # 各轮的轨迹】看出来 —— 这次调了工具下次没调?检索回来的片段不一样?

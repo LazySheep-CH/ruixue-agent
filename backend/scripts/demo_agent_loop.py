@@ -1,9 +1,9 @@
-"""【教学演示】看见 agent 到底在干什么 —— 不花钱、不连数据库,直接跑。
+"""教学演示看见 agent 到底在干什么 —— 不花钱、不连数据库,直接跑。
 
     uv run python scripts/demo_agent_loop.py
 
-做法:用一个【假模型】代替真的 DeepSeek。假模型不思考,只会照剧本说话。
-这样我们就能【指定】它说什么,把 agent 的运转过程完全暴露出来。
+做法:用一个假模型代替真的 DeepSeek。假模型不思考,只会照剧本说话。
+这样我们就能指定它说什么,把 agent 的运转过程完全暴露出来。
 """
 
 import sys
@@ -72,7 +72,7 @@ def endless_tool_calls(n=500):
 
 QUESTION = {"messages": [{"role": "user", "content": "玉米用多厚的地膜?"}]}
 # 图最多允许转多少步,超了就抛 GraphRecursionError。这是 LangGraph 的最后一道保险,
-# 但它是【硬崩】—— 我们要的是在崩之前就优雅停下(见演示三)。
+# 但它是硬崩—— 我们要的是在崩之前就优雅停下(见演示三)。
 LIMIT = {"recursion_limit": 25}
 
 
@@ -114,7 +114,7 @@ def demo1_normal_loop():
 def demo2_runaway_no_brake():
     print("\n\n##### 演示二:模型钻牛角尖(一直要调工具),【没装刹车】 #####")
 
-    # 剧本里【只有】"我要调工具",从来不给"最终答案"
+    # 剧本里只有"我要调工具",从来不给"最终答案"
     # -> 模拟模型永远说『我还要再查一次』。
     model = ScriptedModel(responses=endless_tool_calls())
     agent = create_agent(model, [check_film_thickness])

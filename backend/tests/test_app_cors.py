@@ -29,7 +29,7 @@ def test_preflight_allows_api_key_header():
 
 
 def test_unknown_origin_not_allowed():
-    """【安全】非白名单来源不给放行头(不能用 * 通配)。"""
+    """安全非白名单来源不给放行头(不能用 * 通配)。"""
     resp = client.get("/health", headers={"Origin": "https://evil.example.com"})
     assert resp.headers.get("access-control-allow-origin") != "https://evil.example.com"
     assert resp.headers.get("access-control-allow-origin") != "*"

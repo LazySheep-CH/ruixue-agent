@@ -4,7 +4,7 @@ from ruixue_agent.ingestion.utils.frontmatter import extract_abstract, extract_k
 
 
 def test_case_a_mark_and_content_same_element():
-    """情况A:标记和内容在同一元素,而且【没有冒号】(实测最常见)。"""
+    """情况A:标记和内容在同一元素,而且没有冒号(实测最常见)。"""
     texts = [
         "某某大学",
         "摘 要 为明确不同种类地膜在大棚西瓜的应用效果,以美都西瓜为材料",

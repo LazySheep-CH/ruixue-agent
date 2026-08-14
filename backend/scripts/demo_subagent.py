@@ -1,4 +1,4 @@
-"""【教学演示】看见"多 Agent 协作":主 agent 把子任务派给专家子 agent。
+"""教学演示看见"多 Agent 协作":主 agent 把子任务派给专家子 agent。
 
     uv run python scripts/demo_subagent.py
 
