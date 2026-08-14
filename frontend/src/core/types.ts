@@ -18,6 +18,8 @@ export interface Message {
   streaming?: boolean;
   /** 出错时的提示文案(与 content 互斥) */
   error?: string;
+  /** 后端一次异步运行的编号,用于界面展示与故障定位。 */
+  runId?: string;
 }
 
 /** 一次会话。id 即后端的 thread_id,决定上下文记忆的归属。 */

@@ -18,9 +18,9 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let alive = true;
-    void verifyToken().then((valid) => {
+    void verifyToken().then((status) => {
       if (!alive) return;
-      if (valid) {
+      if (status !== "invalid") {
         setOk(true);
       } else {
         clearAuth();
@@ -34,7 +34,10 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (ok === null) {
     return (
-      <div className="flex h-screen items-center justify-center text-sm text-muted-foreground">载入中…</div>
+      <div className="auth-loading">
+        <span className="auth-loading__mark" />
+        正在进入研究空间…
+      </div>
     );
   }
   return <>{children}</>;
