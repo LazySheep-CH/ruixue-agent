@@ -34,10 +34,7 @@ def create_model(name: str, **overrides) -> BaseChatModel:
                 "model": model["model"],
                 "base_url": model["base_url"],
                 "api_key": model["api_key"],
-                # ===== (你写一行)=====
-                # 超时:配置里写了就用配置的,没写就用上面的默认值。
-                # dict 的 .get(键, 默认值) = "有就取,没有就给我这个默认值"(不会报错):
-                #   timeout=model.get("timeout", DEFAULT_TIMEOUT_SECONDS),
+                # 超时:配置优先,缺省用默认值
                 "timeout": model.get("timeout", DEFAULT_TIMEOUT_SECONDS),
                 # 关掉 SDK 自带的重试 —— 重试统一交给中间件做,避免【重试叠加】:
                 # 若 SDK 重试 2 次、中间件再重试 3 次,最坏情况是 2×3=6 次调用、
