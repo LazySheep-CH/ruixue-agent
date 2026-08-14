@@ -46,8 +46,7 @@ docker/nginx/www/
 .codex-work/
 
 
-# ── 个人材料:评审/对外材料文档永不入库(2026-08-14,曾被推上公开仓库)──
-docs/private/
+# 个人工作文档,不入库
 docs/private/
 # 本地产物与外部工具目录,不入库
 outputs/

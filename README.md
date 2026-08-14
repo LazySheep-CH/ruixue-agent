@@ -124,8 +124,6 @@ cd frontend && npm install && npm run dev      # 浏览器开 http://127.0.0.1:3
 - [docs/评测方法.md](docs/评测方法.md) — 检索评测:评测集怎么造、指标怎么算、逐层增益
 - [docs/Agent评测方法.md](docs/Agent评测方法.md) — Agent 评测:七类用例、噪声地板、配对显著性检验
 - [docs/运维手册.md](docs/运维手册.md) — 部署、备份恢复、并发容量、排查手册
-- [docs/项目问答卡.md](docs/项目问答卡.md) — **一问一答,用来背**(全项目 80+ 题)
-- [docs/项目讲解.md](docs/项目讲解.md) — 按「评审怎么问」重组的项目全景:9 条追问链 + 真实数字 + 边界
 - [docs/操作手册.md](docs/操作手册.md) — 从 PDF 到可检索的完整脚本流程
 - [DECISIONS.md](DECISIONS.md) — 关键技术决策与取舍(为什么这么选)
 - [docs/数据来源.md](docs/数据来源.md) — 领域参数的权威出处
