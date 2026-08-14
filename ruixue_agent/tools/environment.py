@@ -73,5 +73,24 @@ def get_climate_info(place: str, days: int = 90) -> str:
     return "\n".join(lines)
 
 
+@tool
+def get_weather_forecast(place: str, days: int = 7) -> str:
+    """查询某地【未来几天的天气预报】(气温、降水、太阳辐射、紫外、风速)。
+
+    数据源:Open-Meteo 预报,最多 16 天。
+    参数:place 县/区级或市级地名;days 预报天数(默认 7,上限 16)。
+
+    适用:用户问"下周适合铺膜吗""这几天会不会下雨""要刮大风吗"——
+    任何关于【未来】的天气问题。
+    不适用:问"这地方常年气候怎么样""过去一季的降水" —— 那是
+    get_climate_info(历史实况),两者数据源和含义都不同,不要混用。
+
+    注意:返回的是【预报】不是实况,存在不确定性,回答时必须如实说明。
+    """
+    from ruixue_agent.predictors.forecast import format_forecast, get_forecast
+
+    return format_forecast(get_forecast(place, days))
+
+
 def get_environment_tools() -> list[BaseTool]:
-    return [get_soil_info, get_climate_info]
+    return [get_soil_info, get_climate_info, get_weather_forecast]
