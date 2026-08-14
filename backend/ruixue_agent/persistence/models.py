@@ -5,9 +5,9 @@
     "这是解析管道的私有东西",语义就错了。deer-flow 也是把 persistence/ 和 agents/ 平级放。
 
 为什么用 SQLAlchemy 模型而不是手写 SQL:
-    ① 模型是【代码】:有类型、能被 IDE 检查、能被测试
-    ② Alembic 能 diff 模型和数据库,【自动生成】migration
-    ③ 改字段 = 改模型 + 生成一个 migration;手写 CREATE TABLE IF NOT EXISTS 改不了已有表
+    1) 模型是【代码】:有类型、能被 IDE 检查、能被测试
+    2) Alembic 能 diff 模型和数据库,【自动生成】migration
+    3) 改字段 = 改模型 + 生成一个 migration;手写 CREATE TABLE IF NOT EXISTS 改不了已有表
 
 职责边界:PG 存【数据】(元数据/文本/父子关系),Milvus 只存【索引】(向量)。
         数据是资产要可靠可查有事务;索引是派生物可随时重建。
@@ -272,14 +272,12 @@ class RunRow(Base):
 class MemoryRow(Base):
     """长期记忆:跨会话记住这个用户的事实。
 
-    ## 为什么需要长期记忆(先讲问题)
-
+    为什么需要长期记忆(先讲问题):
     老王上周说过"我在尉犁有 50 亩地种棉花"。这周他问"帮我算下用量" ——
     没有长期记忆的话,系统只能反问他面积,因为上周的对话早不在上下文里了。
     短期记忆(滑动窗口 + 摘要)只在【一次会话内】有效,会话一结束就没了。
 
-    ## 决定一:存【抽取出的事实】,不存原始对话
-
+    决定一:存【抽取出的事实】,不存原始对话:
     两种做法的取舍:
         存原始对话  —— 实现简单,但检索噪声大(半句闲聊也会被召回)、
                        浪费 token、而且用户想删某条信息时无从下手。
@@ -289,8 +287,7 @@ class MemoryRow(Base):
     我们选后者。地膜场景的记忆高度结构化(地点/面积/作物/配方/生育期),
     抽成事实几乎没有信息损失,反而把闲聊噪声滤掉了。
 
-    ## 决定二:为什么不只用关系库(面经必追的一问)
-
+    决定二:为什么不只用关系库(面经必追的一问):
     "既然是存用户偏好标签,为什么不用 MySQL?" —— 因为记忆有两种查法:
         精确查:"这个用户的地块在哪" → 关系库,一条 SQL
         语义查:"当前这个问题,和用户以前说过的什么有关" → 只能靠向量
@@ -299,11 +296,10 @@ class MemoryRow(Base):
     关键词一个都不重合,但语义上高度相关(风大 → 要看拉伸强度)。
 
     所以我们【两边都存】:事实进这张表(可查、可编辑、可删除、可审计),
-    同时把事实文本向量化进 Milvus 做语义召回。**PG 是权威,向量是索引**
+    同时把事实文本向量化进 Milvus 做语义召回。PG 是权威,向量是索引
     —— 和文档那套完全一样的分工,向量丢了重建即可。
 
-    ## 决定三:什么时候写
-
+    决定三:什么时候写:
     一次运行【结束之后】异步抽取,不阻塞用户。抽取失败不影响主流程 ——
     记忆是锦上添花,不能因为它拖垮回答。
     """
@@ -340,8 +336,7 @@ class MemoryRow(Base):
 class DatasetRow(Base):
     """用户上传的实测数据表(CSV/Excel)。
 
-    ## 为什么进数据库而不是文件系统
-
+    为什么进数据库而不是文件系统:
     最直觉的做法是把上传的文件存到磁盘,工具再去读。那会引入三个新问题:
     路径逃逸(文件名来自用户输入)、清理与配额(谁删、何时删、满了怎么办)、
     以及"agent 需要一个能读文件的工具"——而我们所有工具目前都是只读且
@@ -349,7 +344,7 @@ class DatasetRow(Base):
 
     存进 PG 之后:
       · 归属校验和 runs 走同一套(user_id 必须匹配),猜到 id 也拿不到别人的;
-      · 工具只接收一个 uuid 形式的 dataset_id,**模型编不出别人的 id**;
+      · 工具只接收一个 uuid 形式的 dataset_id,模型编不出别人的 id;
       · 删除就是一行 DELETE,没有孤儿文件;
       · 备份跟着 PG 走,不用单独备一份文件目录。
 
@@ -357,11 +352,10 @@ class DatasetRow(Base):
     这边上限 5000 行(见 analysis/schema.MAX_ROWS),整表塞 JSON 完全够用,
     不值得为它再建一张"数据行"表。
 
-    ## columns 存的是【映射结果】不是原始表头
-
+    columns 存的是【映射结果】不是原始表头:
     上传时就把用户的列名归一到模型特征名(见 analysis/schema.map_columns),
     并把"认出了什么、没认出什么"一起存下来。这样分析工具拿到的是确定的结构,
-    不必每次重新猜列名 —— **归一只做一次,做在入口**。
+    不必每次重新猜列名 —— 归一只做一次,做在入口。
     """
 
     __tablename__ = "datasets"
@@ -369,7 +363,7 @@ class DatasetRow(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     dataset_id: Mapped[str] = mapped_column(String(36), unique=True, index=True, nullable=False)
     user_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
-    # 原始文件名,只用于展示。**不用它拼路径**(我们根本不落盘),也不进 HTTP 头。
+    # 原始文件名,只用于展示。不用它拼路径(我们根本不落盘),也不进 HTTP 头。
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     n_rows: Mapped[int] = mapped_column(Integer, nullable=False)
     n_cols: Mapped[int] = mapped_column(Integer, nullable=False)

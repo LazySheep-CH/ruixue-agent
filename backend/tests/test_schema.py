@@ -18,14 +18,14 @@ def test_build_a_document():
         parser="mineru",
         elements=[title, para],
     )
-    # ① "有 2 个元素" → 就是列表长度等于 2
+    # 1) "有 2 个元素" → 就是列表长度等于 2
     assert len(doc.elements) == 2
-    # ② "第一个是标题" → 下标 [0] 取第一个,看它的 type
+    # 2) "第一个是标题" → 下标 [0] 取第一个,看它的 type
     assert doc.elements[0].type == "heading"
-    # ③ "标题 level 是 1,正文 level 是 None" → 分别取两个元素的 level
+    # 3) "标题 level 是 1,正文 level 是 None" → 分别取两个元素的 level
     assert doc.elements[0].level == 1
     assert doc.elements[1].level is None
-    # ④ "所有元素 type 都合法" → 遍历每个元素,都得在 ELEMENT_TYPES 里
+    # 4) "所有元素 type 都合法" → 遍历每个元素,都得在 ELEMENT_TYPES 里
     assert all(e.type in ELEMENT_TYPES for e in doc.elements)
 
 

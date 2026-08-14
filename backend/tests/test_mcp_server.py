@@ -1,6 +1,6 @@
 """MCP server(提供方)的测试。
 
-重点全在**几条错了会出事**的边界上,而不是"能不能返回结果":
+重点全在几条错了会出事的边界上,而不是"能不能返回结果":
 
 - 默认必须关闭 —— 一个没人用的入口默认开着,是白送的攻击面。
 - 无凭证必须 401 —— 子应用不吃 FastAPI 的 Depends,鉴权写在 ASGI 层。
@@ -30,11 +30,10 @@ _LIST_TOOLS = {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
 def _restore_global_state():
     """把这个文件弄脏的全局状态复原。
 
-    ## 为什么必须有(踩过)
-
+    为什么必须有(踩过):
     这里的测试要走真实的 app 生命周期(MCP 的会话管理器只在 lifespan 里启动),
-    于是用了 `with TestClient(app)` —— 而退出这个 with 会触发**优雅停机**,
-    `runs._shutting_down` 被永久置 True。后果是**本文件之后的所有测试**
+    于是用了 `with TestClient(app)` —— 而退出这个 with 会触发优雅停机,
+    `runs._shutting_down` 被永久置 True。后果是本文件之后的所有测试
     发起对话都得到 503,而报错信息完全指向别处("为什么 /chat/stream 挂了")。
 
     单跑 test_runs.py 全绿、和本文件一起跑就红 —— 这类"测试之间互相污染"

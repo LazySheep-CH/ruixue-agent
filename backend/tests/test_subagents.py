@@ -183,7 +183,7 @@ def test_diagnosis_expert_has_the_baseline_tool():
 
 
 def test_diagnosis_expert_deliberately_lacks_recipe_screening():
-    """**刻意不给 screen_film_recipes** —— 这条容易被后人"顺手补上"。
+    """刻意不给 screen_film_recipes —— 这条容易被后人"顺手补上"。
 
     诊断是【找原因】,选型是【给方案】。给了筛选工具,模型会跳过排查直接
     推荐新配方 —— 而用户想知道的是"这次为什么坏了"。实测两个案例都在

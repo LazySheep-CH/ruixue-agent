@@ -7,8 +7,8 @@
 
 ═══ 怎么做(吸取上次 reranker 翻车的教训)═══
 上次用本地 reranker 当 judge → 它把"同话题"给 0.9+,过度标注、把 recall 刷虚高。
-这次:① 多路建池(向量+BM25,不同原理都进池)② 用 LLM judge,且 prompt 严格区分
-"能答出那个具体点"(2-3 分)和"只是同话题"(1 分)③ 保守:宁可给低。
+这次:1) 多路建池(向量+BM25,不同原理都进池)2) 用 LLM judge,且 prompt 严格区分
+"能答出那个具体点"(2-3 分)和"只是同话题"(1 分)3) 保守:宁可给低。
 relevance:3 直接完整含核心事实 / 2 必要证据的一部分 / 1 同话题答不出 / 0 无关。
 gold(算 Recall/MRR)= relevance≥2;nDCG 用完整分级。primary_gold(出题确认过)记 3。
 
@@ -80,7 +80,7 @@ def main():
     store = MilvusVectorStore()
     llm = create_model(args.model)
 
-    # ① 建池
+    # 1) 建池
     print("① 多路建候选池(向量+BM25)…")
     t0 = time.time()
     pools = {}
@@ -99,7 +99,7 @@ def main():
     avg_pool = sum(len(p) for p in pools.values()) / len(pools)
     print(f"   池均 {avg_pool:.1f} 候选  ({time.time() - t0:.0f}s)\n")
 
-    # ② LLM judge(seed 直接记 3,不判)
+    # 2) LLM judge(seed 直接记 3,不判)
     print("② LLM judge 逐候选评 relevance(严格)…")
     t0 = time.time()
     jobs = []  # (question, cid)
@@ -133,7 +133,7 @@ def main():
                 print(f"   {done}/{len(jobs)}  ({time.time() - t0:.0f}s)")
     print(f"   judge 完成 {len(jobs)} 次  ({time.time() - t0:.0f}s)\n")
 
-    # ③ 写回:relevance 全分级;gold_chunk_ids = relevance≥2
+    # 3) 写回:relevance 全分级;gold_chunk_ids = relevance≥2
     for q in qs:
         if not q.get("has_answer"):
             q["relevance"] = {}
@@ -147,7 +147,7 @@ def main():
         "\n".join(json.dumps(q, ensure_ascii=False) for q in qs) + "\n", encoding="utf-8"
     )
 
-    # ④ 质量检查
+    # 4) 质量检查
     ng = [len(q["gold_chunk_ids"]) for q in ans]
     print(f"{'═' * 60}\n质量检查\n{'═' * 60}")
     print(f"  每题 gold 数(rel≥2):平均 {sum(ng) / len(ng):.2f},最多 {max(ng)}")

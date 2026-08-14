@@ -1,45 +1,41 @@
 """长期记忆收益实验:量化"有记忆"比"没记忆"好多少。
 
-## 要回答的问题
-
+要回答的问题:
 我们建了长期记忆(抽取事实 → PG 存权威 → 向量召回 → 下一轮注入),
-但**它到底有没有用、有多大用**,此前没有数字。没有数字的模块,
+但它到底有没有用、有多大用,此前没有数字。没有数字的模块,
 在评审和面试里都等同于"听起来有用"。
 
-## 实验设计:一次只变一个东西
-
+实验设计:一次只变一个东西:
 每道题两轮,跑在【不同 thread_id、同一 user_id】下:
 
     setup 轮   thread = "<user>:s1"   用户陈述一个只有他自己知道的事实
     probe 轮   thread = "<user>:s2"   一个必须用上那个事实才能答好的问题
 
-**换 thread 是这个实验成立的前提。** 同一个 thread 里,checkpointer 会把
+换 thread 是这个实验成立的前提。 同一个 thread 里,checkpointer 会把
 上下文原样带过去 —— 那测的是短期记忆,和长期记忆一点关系没有。换了 thread
 之后上下文归零,probe 轮唯一可能的信息来源就是长期记忆。
 
-两个 arm 的唯一差别是 **recall 有没有返回内容**:
+两个 arm 的唯一差别是 recall 有没有返回内容:
 
     on  组:正常召回
     off 组:把 recall 打成返回空
 
-刻意**不去掉中间件本身**:去掉了就同时改变了中间件链、token 数、执行路径,
+刻意不去掉中间件本身:去掉了就同时改变了中间件链、token 数、执行路径,
 测出来的差值不知道该归给谁。只掐掉召回结果,变量才只有一个。
 两个 arm 连"写记忆"这一步都照跑 —— 反正 off 组读不到,留着能保证两条流水线
 完全一致。
 
-## 两个 arm 必须用不同的 user_id
-
-记忆是**软删 + 内容寻址**的(删过的事实不会复活,见 memory 模块)。
+两个 arm 必须用不同的 user_id:
+记忆是软删 + 内容寻址的(删过的事实不会复活,见 memory 模块)。
 如果两个 arm 共用 user_id、中间靠删除来重置,第二个 arm 会因为
 "这条删过"而永远存不进去 —— 于是 on 组也读不到记忆,**实验静默失效,
 测出来的收益是 0**,而你会以为记忆没用。
 
 所以 arm 之间用 `<user>-on` / `<user>-off` 两个身份,互不干扰,也不用删。
 
-## 出题的铁律
-
-probe 里**绝不能**重复 setup 里的关键信息 —— 否则不用记忆也能答对,
-这道题的收益恒为 0。这类错误不会报错,只会**静默稀释真实收益**,
+出题的铁律:
+probe 里绝不能重复 setup 里的关键信息 —— 否则不用记忆也能答对,
+这道题的收益恒为 0。这类错误不会报错,只会静默稀释真实收益,
 所以在加载期就校验死(见 `_validate`)。
 """
 
@@ -136,25 +132,23 @@ def _wait_visible(recall_fn, user_id: str, query: str) -> float:
 def _kp_used(kp: KeyPoint, turn: Turn) -> bool:
     """要点是否【真的被用上】。
 
-    ## 数值要点:只认工具调用参数,不看正文(判据 v3)
-
-    正文里的数字**分不清是"用上了"还是"举例说明"**:
+    数值要点:只认工具调用参数,不看正文(判据 v3):
+    正文里的数字分不清是"用上了"还是"举例说明":
 
         m05 的 off 组反问时列举「棉花约150天、玉米约120天」→ 正则命中 120
         m10 的 off 组反问时举例「比如:"新疆尉犁县,棉花,100亩"」→ 命中"尉犁"
 
     两条都在反问(=没用上记忆),却被判成用上了。方向还是固定的:
-    **只抬高 off 组,从而系统性低估记忆的收益**。
+    只抬高 off 组,从而系统性低估记忆的收益。
 
     而 `estimate_film_usage(area_mu=50)` 这样的工具调用参数是铁证 ——
-    模型不会"举例调一次工具"。所以数值要点**只认参数**,正文一律不算。
+    模型不会"举例调一次工具"。所以数值要点只认参数,正文一律不算。
 
     代价说清楚:agent 复述了"您的 50 亩棉花地"但最终没调工具,会被判为
-    没用上。这个取舍是**故意**的 —— 记忆的价值在于让它把活干完,
+    没用上。这个取舍是故意的 —— 记忆的价值在于让它把活干完,
     知道了却不用,和不知道的区别不大。
 
-    ## 文字要点:看正文
-
+    文字要点:看正文:
     "推荐理由要落在保墒上"这类没法从参数里读,只能看正文。误判风险存在
     但方向可控:off 组要泛泛提到"保墒"也得先谈到这个维度,不像数字那样
     随便举个例就撞上。
@@ -233,16 +227,14 @@ class Turn:
 def _ask(agent, user_id: str, thread_suffix: str, question: str) -> Turn:
     """跑一轮对话并观测。thread_id 形如 "<user>:<suffix>"。
 
-    ## injected 为什么扫消息而不是再调一次 recall
-
-    "记忆有没有生效"的**唯一真相**是它在不在上下文里。另调一次 recall 只能
+    injected 为什么扫消息而不是再调一次 recall:
+    "记忆有没有生效"的唯一真相是它在不在上下文里。另调一次 recall 只能
     说明"现在能召回",不代表刚才那轮注入了 —— 实测这两者会不一致
     (刚写入的向量有短暂的可见性延迟,而中间件晚几百毫秒执行反而召回成功),
     于是诊断字段会撒谎:显示"召回 0 条"但这道题其实是靠记忆过的。
 
-    ## tool_args 为什么要收
-
-    判"有没有用上 50 亩"这件事,**工具调用参数是结构证据,答案文字只是旁证**。
+    tool_args 为什么要收:
+    判"有没有用上 50 亩"这件事,工具调用参数是结构证据,答案文字只是旁证。
     模型可能在正文里举例说"比如 50 亩",那不算用上;但如果它调了
     `estimate_film_usage(area_mu=50)`,那就是铁证。
     """
@@ -277,7 +269,7 @@ def _ask(agent, user_id: str, thread_suffix: str, question: str) -> Turn:
 def run_arm(agent, case: MemoryCase, with_memory: bool, run_tag: str = "") -> ArmResult:
     """跑一道题的一个 arm:setup → 写记忆 → probe → 判分。
 
-    run_tag 给每次实验一个独立的记忆命名空间。**没有它这个实验不可重复**:
+    run_tag 给每次实验一个独立的记忆命名空间。没有它这个实验不可重复:
     记忆是软删 + 内容寻址的(删过的不复活),所以既不能靠删除重置,
     跑第二轮时上一轮的记忆还在 —— 召回条数越跑越多,而且会混进
     调试时留下的脏数据。换个 user_id 前缀是最干净的隔离。
@@ -291,18 +283,18 @@ def run_arm(agent, case: MemoryCase, with_memory: bool, run_tag: str = "") -> Ar
 
     real_recall = mem.recall
     try:
-        # ① setup 轮:让用户陈述事实。这一轮不判分,只为了产生可抽取的对话。
+        # 1) setup 轮:让用户陈述事实。这一轮不判分,只为了产生可抽取的对话。
         #    setup 轮也要掐掉召回 —— 否则 on 组的第一轮就先注入了一次记忆,
         #    两个 arm 的第一轮就不一样了。
         mem.recall = lambda uid, q: []
         setup_turn = _ask(agent, user_id, "s1", case.setup)
 
-        # ② 写记忆:和生产同一条路径(main.py::_remember_async),不另写一套。
+        # 2) 写记忆:和生产同一条路径(main.py::_remember_async),不另写一套。
         facts = extract_facts(case.setup, setup_turn.answer)
         # stored == 0 会在报告里单列("瓶颈在抽取层")—— 不能混进"记忆没用"里。
         res.stored = mem.remember(user_id, facts) if facts else 0
 
-        # ②.5 等新记忆变得可召回。**这一步不是实验的一部分,是在排除干扰。**
+        # 2.5 等新记忆变得可召回。这一步不是实验的一部分,是在排除干扰。
         #
         # 实测:Milvus 写入后到能被搜到,延迟 0.12s ~ 11.43s(三次采样,抖动极大)——
         # 向量插入要等一次 flush 才进可搜索段。不等的话,probe 轮召回为空,
@@ -312,14 +304,14 @@ def run_arm(agent, case: MemoryCase, with_memory: bool, run_tag: str = "") -> Ar
         if with_memory and res.stored:
             res.visible_after_s = _wait_visible(real_recall, user_id, case.probe)
 
-        # ③ probe 轮:换 thread → 上下文归零 → 只有长期记忆能救。
+        # 3) probe 轮:换 thread → 上下文归零 → 只有长期记忆能救。
         if with_memory:
             mem.recall = real_recall
         turn = _ask(agent, user_id, "s2", case.probe)
         res.answer = turn.answer
         res.injected = turn.injected
         res.asked_back = turn.asked_back
-        # 原始轨迹要留下来 —— **判据会改,轨迹不该重跑**。
+        # 原始轨迹要留下来 —— 判据会改,轨迹不该重跑。
         # v2 那次改判据时因为没存 tool_args,只能把 48 次对话整个重跑一遍。
         res.tool_args = turn.tool_args
 
@@ -333,7 +325,7 @@ def run_arm(agent, case: MemoryCase, with_memory: bool, run_tag: str = "") -> Ar
         #
         # v2 加过"反问即失败",实测太粗:m07 明明完美用上了记忆
         # (「结合您的实际情况:春季风大、地膜曾被吹烂」,要点全中),
-        # 只因正文里有个问号就被判失败 —— 这次是**压低 on 组**,方向反了。
+        # 只因正文里有个问号就被判失败 —— 这次是压低 on 组,方向反了。
         #
         # 而且"反问"本身不一定是失败:m06 用上了偏好(保墒),但还要问地点
         # ——地点从来就不在记忆里,问它是【正确行为】。
@@ -349,7 +341,7 @@ def run_arm(agent, case: MemoryCase, with_memory: bool, run_tag: str = "") -> Ar
 
 
 def run_bench(agent, cases: list[MemoryCase], on_case=None, run_tag: str = "") -> BenchReport:
-    """跑完整实验。**off 组先跑** —— 顺序固定,免得有人怀疑是热身效应。
+    """跑完整实验。off 组先跑 —— 顺序固定,免得有人怀疑是热身效应。
 
     run_tag 缺省自动生成:每次跑都是全新的记忆命名空间,历史数据不会串进来。
     """

@@ -4,9 +4,9 @@ Revision ID: df9bfcd2f774
 Revises: 3f069886db2e
 Create Date: 2026-08-06
 
-⚠️ 注意:autogenerate 原本还生成了 drop checkpoint* 四张表的语句 —— 那是 LangGraph
+注意:️ 注意:autogenerate 原本还生成了 drop checkpoint* 四张表的语句 —— 那是 LangGraph
 的会话记忆表,由 PostgresSaver.setup() 在运行时创建、不在我们的 SQLAlchemy 模型里,
-Alembic 便误判成"多余的表"。**已手工删除那些 drop 语句**,否则升级会清空所有对话历史。
+Alembic 便误判成"多余的表"。已手工删除那些 drop 语句,否则升级会清空所有对话历史。
 
 这是第二次踩同一个坑(users 表那次也是)。教训:autogenerate 只是草稿,
 凡是生成了 drop 的,一律先人工审阅再执行。
