@@ -12,11 +12,10 @@
     uv run python scripts/run_agent_eval.py --only injection   # 只跑某一类(快速验证)
     uv run python scripts/run_agent_eval.py --dry-run          # 只校验评测集,不调模型
 
-⚠ 这个脚本【会真的调大模型花钱】。33 题一轮大约几分钟。
+注意:这个脚本【会真的调大模型花钱】。33 题一轮大约几分钟。
    要在 CI 里跑的确定性部分在 tests/test_agent_eval.py,那部分不花钱。
 
-## 怎么用它做版本对比(这才是评测的意义)
-
+怎么用它做版本对比(这才是评测的意义):
     1. 改动前:--repeat 3 跑三轮,记下噪声地板(同版本自己抖多少)
     2. 存一份基线:结果自动落在 runs/agent_eval_<时间戳>.json
     3. 改动后:--baseline <那份基线> 再跑

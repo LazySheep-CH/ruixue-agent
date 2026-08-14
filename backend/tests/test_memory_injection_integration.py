@@ -1,27 +1,26 @@
 """长期记忆注入的【集成】测试:走真 agent、真 runtime,只把模型换成假的。
 
-## 为什么必须单独有这一层
-
+为什么必须单独有这一层:
 `tests/test_memory.py` 里已经测过 `MemoryRecallMiddleware.before_model` 的逻辑,
-而且测得很细(注入时机、去重、身份隔离)。但那些测试用的是**手搓的假 runtime**:
+而且测得很细(注入时机、去重、身份隔离)。但那些测试用的是手搓的假 runtime:
 
     class _Rt:
         def __init__(self, thread_id):
             self.config = {"configurable": {"thread_id": thread_id}}
 
-它测的是"**如果** runtime 长这样,逻辑对不对"。
+它测的是"如果 runtime 长这样,逻辑对不对"。
 
-而 LangGraph 的真 `Runtime` **没有 `config` 属性**(官方文档:"Runtime does not
+而 LangGraph 的真 `Runtime` 没有 `config` 属性(官方文档:"Runtime does not
 include config",要用 `langgraph.config.get_config()`)。于是:
 
     单元测试:全绿  ✅   ——  因为假 runtime 带 .config
     真实运行:全废  ❌   ——  真 runtime 没有 .config,user_id 恒为空,永不注入
 
-**2026-08-12 实测:长期记忆从上线起一次都没注入过。**
+2026-08-12 实测:长期记忆从上线起一次都没注入过。
 失败方式是"什么都不做"——没身份就不注入本身是正确行为(宁可不给,不可给错人),
 所以没有报错、没有异常日志,只是功能静静地不生效。
 
-结论:**凡是依赖框架对象形状的逻辑,必须有一条走真框架的测试。**
+结论:凡是依赖框架对象形状的逻辑,必须有一条走真框架的测试。
 假的输入只能验证你的 if-else,验证不了你对框架的假设。
 
 这条测试用 FakeMessagesListChatModel:不花钱、确定性、能进 CI,
@@ -117,7 +116,7 @@ def test_memory_still_injects_when_a_skill_also_injects(monkeypatch, _fake_recal
         "帮我算一下要买多少地膜"     不触发技能 → 记忆注入 ✅
         "帮我在赤峰选个合适的配方"   触发技能   → 记忆被挡 ❌
 
-    最讽刺的是**最需要记忆的问题(选型/配方/推荐)恰恰最容易触发技能**,
+    最讽刺的是最需要记忆的问题(选型/配方/推荐)恰恰最容易触发技能,
     这个 bug 精准地打掉了记忆最有价值的那部分场景。
 
     这里用一句同时命中技能触发词("配方")的提问,断言两者都在。

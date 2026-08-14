@@ -1,6 +1,6 @@
 """PDF 报告导出的测试。
 
-重点在几条**错了会出事、但不会报错**的地方:
+重点在几条错了会出事、但不会报错的地方:
 
 - 中文折行:按空格折等于不折(中文段落没有空格),文字会画到纸外 ——
   PDF 照样生成成功,只是内容看不见。
@@ -128,7 +128,7 @@ def test_filename_never_contains_user_input():
     """提问里的换行拼进 Content-Disposition 就是响应头注入。
 
     文件名只用日期 + run_id 前 8 位,天生不含用户输入 —— 这不是"记得转义",
-    是**根本不给它机会**。
+    是根本不给它机会。
     """
     name = filename_for(_data(question="换行\n注入: X-Evil: 1\r\n"))
     assert name == "ruixue-report-20260812-abcd1234.pdf"
@@ -155,7 +155,7 @@ _TABLE_MD = """按环境推荐如下:
 def _rendered_text(md: str) -> str:
     """渲染一段 Markdown 并取回纸面文字。
 
-    ⚠ 别叫 _text_of —— 本文件上面已有同名函数(参数是 PDF 字节)。
+    注意:别叫 _text_of —— 本文件上面已有同名函数(参数是 PDF 字节)。
       Python 取最后一个定义,重名会让【上面所有测试】把 PDF 字节当 Markdown 传,
       报一个和真实原因毫不相干的 TypeError。踩过一次。
     """
@@ -209,7 +209,7 @@ def test_overlong_cell_is_truncated_not_drawn_off_page():
 # ── 下载接口:归属校验是【安全边界】,不是功能 ──────────────────
 #
 # 上面全是渲染层的测试(纯函数、不连库)。但这份报告是通过 HTTP 下载的,
-# 而**猜到别人的 run_id 就能下载别人的报告 = 数据泄露**。
+# 而猜到别人的 run_id 就能下载别人的报告 = 数据泄露。
 # 渲染测得再细也覆盖不到这一层 —— 必须走真接口。
 
 

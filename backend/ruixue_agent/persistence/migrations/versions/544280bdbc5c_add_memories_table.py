@@ -2,7 +2,7 @@
 
 长期记忆表:跨会话记住某个用户的事实。设计取舍见 models.py 的 MemoryRow 文档。
 
-⚠⚠ 手工删掉了 autogenerate 生成的 checkpoint 表 DROP 语句 —— 这是第【三】次踩到。
+注意:注意:手工删掉了 autogenerate 生成的 checkpoint 表 DROP 语句 —— 这是第【三】次踩到。
     checkpoints / checkpoint_blobs / checkpoint_writes / checkpoint_migrations
     是 LangGraph 的 PostgresSaver 【自己建、自己管】的,不在我们的 SQLAlchemy
     模型里。alembic 比对时发现"库里有、模型里没有",就以为是要删的残留表。

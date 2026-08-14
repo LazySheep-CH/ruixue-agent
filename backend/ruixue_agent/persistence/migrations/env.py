@@ -6,9 +6,9 @@ Alembic 干的事:
     串成一条链。数据库里有张 alembic_version 表记着「我现在在哪个版本」。
 
     这就是为什么它能做到手写 schema.sql 做不到的三件事:
-      ① 升级:alembic upgrade head —— 从当前版本一路跑到最新
-      ② 回滚:alembic downgrade -1 —— 每个 migration 都有 downgrade()
-      ③ 追溯:git log 里能看到表结构的完整演化史
+      1) 升级:alembic upgrade head —— 从当前版本一路跑到最新
+      2) 回滚:alembic downgrade -1 —— 每个 migration 都有 downgrade()
+      3) 追溯:git log 里能看到表结构的完整演化史
 """
 
 from __future__ import annotations
@@ -46,10 +46,10 @@ target_metadata = Base.metadata
 #     op.drop_table('checkpoint_blobs')
 #     op.drop_table('checkpoint_migrations')
 #
-# 跑下去就是**清空所有会话的执行状态** —— 而且迁移本身会"成功",
+# 跑下去就是清空所有会话的执行状态 —— 而且迁移本身会"成功",
 # 没有任何报错,只有用户发现"我的对话怎么接不上了"。
 #
-# 这类风险的共性:**多个组件共用一个库,而只有一个组件持有"完整视图"**。
+# 这类风险的共性:多个组件共用一个库,而只有一个组件持有"完整视图"。
 # 解法不是"记得每次审一遍迁移"(迟早会忘),而是在生成期就把它们排除。
 _FOREIGN_TABLE_PREFIXES = ("checkpoint",)
 

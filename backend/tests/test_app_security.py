@@ -27,7 +27,7 @@ def _inject_api_key(monkeypatch):
     monkeypatch.setattr(auth, "API_KEYS", {_TEST_KEY: "alice"})
 
 
-# ── 认证:没带对钥匙,进不来(P0 第①道门)──────────────────────
+# ── 认证:没带对钥匙,进不来(P0 第1)道门)──────────────────────
 def test_missing_api_key_returns_401():
     """没带 X-API-Key -> 401,连业务都不会执行。"""
     resp = client.post("/chat", json={"thread_id": "t1", "message": "你好"})
@@ -44,7 +44,7 @@ def test_wrong_api_key_returns_401():
     assert resp.status_code == 401
 
 
-# ── 输入上限:超长直接拒(P0 第④道门,防烧 token)──────────────
+# ── 输入上限:超长直接拒(P0 第4)道门,防烧 token)──────────────
 # 下面几个用【正确的钥匙】(见上方 fixture),让认证先通过,单独验证"输入校验"这一关。
 
 

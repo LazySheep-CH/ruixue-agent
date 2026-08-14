@@ -97,7 +97,7 @@ def test_returns_parent_text_not_child_text(rows):
 
 
 def test_dedups_parents(rows):
-    """决策①:3 个子块可能都来自【同一个父块】。
+    """决策1):3 个子块可能都来自【同一个父块】。
 
     同一节里三句话都跟问题相关 —— 这恰恰说明那一节是对的。
     但不能把同一段父块文本重复三遍塞给 LLM:白烧 token,
@@ -123,11 +123,11 @@ def test_dedup_preserves_similarity_order(rows):
     assert [g.chunk_id for g in got] == ["P2", "P1"]  # P2 分高,排前面
 
 
-# ────────────── 2. 决策①:k 不够怎么办 ──────────────
+# ────────────── 2. 决策1):k 不够怎么办 ──────────────
 
 
 def test_overfetches_children_to_fill_k_parents(rows):
-    """决策①的答案:用户要 k 个【父块】,就得多搜几个子块。
+    """决策1)的答案:用户要 k 个【父块】,就得多搜几个子块。
 
     只搜 3 个子块 → 可能全来自 1 个父块 → 只还 1 个,用户要 3 个。
     所以要【超取】:搜 k * fanout 个子块,去重后取前 k 个父块。
@@ -150,11 +150,11 @@ def test_returns_at_most_k_parents(rows):
     assert len(got) == 1
 
 
-# ────────────── 3. 决策②:父块的分数 ──────────────
+# ────────────── 3. 决策2):父块的分数 ──────────────
 
 
 def test_parent_score_is_best_child_score(rows):
-    """决策②:父块自己没有分数 —— Milvus 给的是子块的。
+    """决策2):父块自己没有分数 —— Milvus 给的是子块的。
 
     P1 命中两个子块(0.82 和 0.71),父块 P1 算几分?
     取【最高】那个:一节里最相关的那句话,代表这一节的相关度。
@@ -167,11 +167,11 @@ def test_parent_score_is_best_child_score(rows):
     assert got[0].score == pytest.approx(0.82)
 
 
-# ────────────── 4. 决策③:返回结构 ──────────────
+# ────────────── 4. 决策3):返回结构 ──────────────
 
 
 def test_result_carries_provenance(rows):
-    """决策③:LLM 光有文本不够,还得知道【这话哪儿来的】。
+    """决策3):LLM 光有文本不够,还得知道【这话哪儿来的】。
 
     没有出处 = 用户没法核实 = 这个 RAG 不能用在生产上。
     地膜标准这种场景尤其:答错了是要赔钱的。

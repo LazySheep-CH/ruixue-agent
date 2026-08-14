@@ -4,9 +4,9 @@
 下游:clean / chunk / metadata / embed 一律只认 Document,不认原始 PDF。
 
 用 Pydantic 而不是 dataclass,因为这个 IR:
-  ① 要落盘再读回(data/parsed/*.json)→ model_dump_json / model_validate_json 自动搞定嵌套
-  ② 吃 parser 的外部脏数据 → 构造时自动校验类型,坏数据在入口就被拦(Parse, don't validate)
-  ③ 和 参考架构 一致(它全用 Pydantic)
+  1) 要落盘再读回(data/parsed/*.json)→ model_dump_json / model_validate_json 自动搞定嵌套
+  2) 吃 parser 的外部脏数据 → 构造时自动校验类型,坏数据在入口就被拦(Parse, don't validate)
+  3) 和 参考架构 一致(它全用 Pydantic)
 """
 
 from __future__ import annotations

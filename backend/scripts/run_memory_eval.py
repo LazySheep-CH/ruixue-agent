@@ -5,7 +5,7 @@
     uv run python scripts/run_memory_eval.py --out data/eval/baselines/memory_v1.json
 
 和 run_agent_eval.py 的区别:那个测"agent 能力有多强",这个测
-"某一个模块贡献了多少" —— 是**对照实验**,不是能力评分。
+"某一个模块贡献了多少" —— 是对照实验,不是能力评分。
 所以它的输出是一个【差值】,不是一个分数。
 
 前置:PG + Milvus 起着(要真写、真召回记忆)。跑一轮约 24 次对话 + 24 次抽取。

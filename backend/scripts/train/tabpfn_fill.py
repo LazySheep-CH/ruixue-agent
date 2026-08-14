@@ -55,7 +55,7 @@ def main(name: str) -> None:
         ),
         columns=cols,
     )
-    # ① 连续变量修正:插补器不认物理边界,会填出 PBAT=-45% 这种不可能值。
+    # 1) 连续变量修正:插补器不认物理边界,会填出 PBAT=-45% 这种不可能值。
     #    按变量字典的合理范围裁剪回边界。
     clipped = {}
     for col, (lo, hi) in cfg["ranges"].items():
@@ -65,7 +65,7 @@ def main(name: str) -> None:
                 clipped[col] = bad
                 filled[col] = filled[col].clip(lo, hi)
 
-    # ② 分类变量修正:填充器当连续量填出了小数(如 Color=2.4),四舍五入回整数 + 裁剪合法域。
+    # 2) 分类变量修正:填充器当连续量填出了小数(如 Color=2.4),四舍五入回整数 + 裁剪合法域。
     for col in cfg["categorical"]:
         if col in filled.columns and col in CATEGORICAL_DOMAINS:
             lo, hi = CATEGORICAL_DOMAINS[col]
