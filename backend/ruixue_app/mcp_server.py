@@ -1,53 +1,26 @@
-"""把瑞雪的领域工具暴露为 MCP server —— 让【别人的 agent】能用我们的能力。
+"""MCP 服务端:把本项目的工具暴露给外部 agent 调用。
 
-这是 MCP 的另一个方向:
-`ruixue_agent/mcp/client.py` 是消费方:把别人的工具接进我们的 agent。
-这个文件是提供方:把我们的工具暴露出去,别人配 4 行就能用。
+和 ruixue_agent/mcp/client.py 方向相反:client 是接别人的工具进来,这里是把
+predict_* / screen_film_recipes / search_knowledge 这类自有能力开放出去,
+对方在 MCP 客户端里配一个 url + key 就能用。
 
-值得暴露的是别处买不到的能力:
-    predict_*            自己训的三个性能预测模型
-    screen_film_recipes  配方筛选
-    search_knowledge     1500+ 篇文献与国标的领域问答
+几个设计决定:
 
-三个设计决定,每个都有反例:
-1) 挂在现有 FastAPI 上,不另起进程:
-另起进程意味着 embedding + reranker + 三棵树模型再加载一份。
-压测实测每 worker 677MB —— 内存直接翻倍,换来的只是"架构图上多一个框"。
-同进程挂载共享已加载的一切,零额外内存。
+- 挂在现有 FastAPI 进程上,不单独起服务。embedding、reranker、三个树模型
+  每 worker 占约 677MB(压测数据),另起进程等于再付一份内存,没有收益。
+  代价是 MCP 出问题会波及主服务,可接受:本来就是同一批工具代码。
+- 鉴权复用主服务的 JWT / X-API-Key,不设第二套账号;认证失败一律拒绝
+  (fail closed),配额计数失败放行(fail open),方向和 quota.py 一致。
+- 默认关闭,RUIXUE_MCP_SERVER=1 才启用;RUIXUE_MCP_TOOLS 可白名单限定。
+- 每次工具调用计入 DAILY_CHAT_QUOTA,和 /chat 同一个计数器。外部调用方是
+  程序不是人,search_knowledge 每次都有 LLM 成本,不计数撑不住。
 
-代价:MCP 端出问题会影响主服务。可接受 —— 工具本来就是同一批代码,
-真要隔离,该隔离的是工具本身而不是协议层。
-
-2) 鉴权 fail-closed,配额 fail-open:
-新开一个入口 = 一个新的攻击面。这里复用主服务的凭证体系
-(JWT 或 X-API-Key),没有第二套账号。
-
-两道门的降级方向刻意相反,和 quota.py 里的理由一致:
-  · 认证是安全边界 —— 校验不了就必须拒绝(fail closed)
-  · 配额是成本控制 —— 计数器挂了不该把真实用户挡在门外(fail open)
-
-3) 默认关闭:
-和客户端同一个原则:没显式开启就完全不启用,零开销、零攻击面。
-一个没人用的功能默认开着,是纯粹的风险。
-
-为什么外部调用必须计配额:
-MCP 客户端是程序,不是人。人一分钟问 3 次,程序一秒能打 300 次。
-而 search_knowledge 每次调用要花我们一次 LLM 的钱 —— 不计数等于
-给别人开了个免费的钱包。
-
-配额与 /chat 共用同一个每日计数器:一个用户一个钱包,
-不管他是从网页问的还是从自己的 agent 调的。
-
-启用方式:
-    RUIXUE_MCP_SERVER=1                      # 开启(默认关闭)
-    RUIXUE_MCP_TOOLS=predict_by_location,... # 只暴露这几个(默认全部)
-
-对方接入(以 Claude Desktop / 任意 MCP 客户端为例):
+对方接入示例:
 
     {"mcpServers": {"ruixue": {
         "transport": "streamable_http",
-        "url": "https://你的域名/mcp",
-        "headers": {"X-API-Key": "给对方签发的 key"}}}}
+        "url": "https://<域名>/mcp",
+        "headers": {"X-API-Key": "<签发的 key>"}}}}
 """
 
 from __future__ import annotations
