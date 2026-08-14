@@ -27,15 +27,6 @@ class TimingLoggingMiddleware(AgentMiddleware):
     """
 
     def wrap_tool_call(self, request, handler):
-        # ============================================================
-        #   (你写函数体):
-        #   1. 记开始时间:      t0 = time.perf_counter()
-        #   2. 取工具名:        name = request.tool_call["name"]
-        #   3. 执行工具:        result = handler(request)   ← 这一句才真正执行工具
-        #   4. 算耗时并记日志:   ms = (time.perf_counter() - t0) * 1000
-        #                       logger.info("工具 %s 耗时 %.0fms", name, ms)
-        #   5. return result
-        # ============================================================
         t0 = time.perf_counter()
         name = request.tool_call["name"]
         result = handler(request)
@@ -96,19 +87,19 @@ class SkillInjectionMiddleware(AgentMiddleware):
 
     def before_model(self, state, runtime):
         messages = state.get("messages") or []
-        if not messages:
-            return None
-        last = messages[-1]
-        if type(last).__name__ != "HumanMessage":
+        last = _last_human(messages)
+        if last is None:
             return None
 
         hit = select_skills(str(last.content))
         if not hit:
             return None  # 这次提问没命中任何规程
 
-        # 扫历史,看哪些规程已经在上下文里了
+        # 扫【全部】历史(含本轮已注入的),看哪些规程已经在上下文里了。
+        # 用 messages[:-1] 会漏掉刚注入的那条 —— 配合 _last_human 之后
+        # 本方法在同一轮里可能被调用多次,漏扫就会重复注入。
         already: set[str] = set()
-        for m in messages[:-1]:
+        for m in messages:
             already |= injected_names(str(getattr(m, "content", "")))
         fresh = [s for s in hit if s.name not in already]
         if not fresh:
@@ -163,13 +154,12 @@ class MemoryRecallMiddleware(AgentMiddleware):
 
     def before_model(self, state, runtime):
         messages = state.get("messages") or []
-        if not messages:
-            return None
-        last = messages[-1]
-        if type(last).__name__ != "HumanMessage":
+        last = _last_human(messages)
+        if last is None:
             return None
         # 本会话是否已经注入过记忆?靠扫历史里的标题判断,不额外存状态。
-        if any(MEMORY_HEADER in str(getattr(m, "content", "")) for m in messages[:-1]):
+        # 扫【全部】消息:配合 _last_human,本方法在同一轮里可能被调用多次。
+        if any(MEMORY_HEADER in str(getattr(m, "content", "")) for m in messages):
             return None
 
         user_id = _user_id_from(runtime)
@@ -197,18 +187,88 @@ class MemoryRecallMiddleware(AgentMiddleware):
         }
 
 
+def _last_human(messages):
+    """取【最后一条用户消息】;没有就返回 None。
+
+    ## ⚠ 2026-08-12 修:不能用 messages[-1]
+
+    原来两个注入中间件都写的是:
+
+        last = messages[-1]
+        if type(last).__name__ != "HumanMessage":
+            return None
+
+    这个判据默认"用户消息永远在最后"。但**前面的中间件会往消息尾部追加
+    SystemMessage** —— 技能注入干的就是这件事。链的顺序是
+    技能 → 记忆,所以只要这一轮命中了技能:
+
+        messages[-1] 变成技能的 SystemMessage
+            → 记忆中间件的判据不成立
+            → 直接 return None
+            → **记忆永远注不进去**
+
+    实测(2026-08-12):
+
+        "帮我算一下要买多少地膜"      不触发技能 → 记忆注入 ✅
+        "帮我在赤峰选个合适的配方"    触发技能   → 记忆被挡 ❌
+
+    最讽刺的是**最需要记忆的问题(选型、配方、推荐)恰恰最容易触发技能** ——
+    这个 bug 精准地打掉了记忆最有价值的那部分场景。
+
+    改成"往回找最后一条 HumanMessage",中间件之间就不再靠"谁在最后"这种
+    隐式约定耦合。配套地,去重判据要扫**全部**消息(见两处调用点)。
+    """
+    for m in reversed(messages):
+        if type(m).__name__ == "HumanMessage":
+            return m
+    return None
+
+
 def _user_id_from(runtime) -> str:
     """从运行配置里取 user_id。
 
     我们的 thread_id 形如 "alice:t1"(见 main.py 的命名空间隔离),
     所以用户身份可以从它前缀还原 —— 不必再单独传一个参数。
+
+    ## ⚠ 2026-08-12 修:原来读 `runtime.config`,而它根本不存在
+
+    LangGraph 的 `Runtime` **没有 `config` 属性**(官方文档明确写着
+    "Runtime does not include config",要用 `langgraph.config.get_config()`)。
+    原实现 `getattr(runtime, "config", None) or {}` 于是恒为 `{}`,
+    user_id 恒为空字符串,`MemoryRecallMiddleware` 直接 return None ——
+    **长期记忆从上线起就没注入过一次**。
+
+    为什么一直没被发现,有两层原因,都值得记:
+
+    ① **失败方式是"什么都不做"**:没身份就不注入,这条分支本身是对的
+       (宁可不给,不可给错人),所以没有任何报错、没有异常日志,
+       只是记忆功能静静地不生效。
+
+    ② **测试是假的**:`tests/test_memory.py` 里的 `_Rt` 是手搓的假 runtime,
+       特意带了 `.config`。它测的是"如果 runtime 长这样,逻辑对不对",
+       而真 runtime 不长这样 —— 于是测试全绿、功能全废。
+       和 SkillInjectionMiddleware 那次是同一类:**假的输入喂出假的信心**。
+       现在补了一条走真 agent 的集成测试(test_memory_injection_integration),
+       用假模型不花钱,但 runtime 是真的。
+
+    两条来源都试:`get_config()` 是正路;`runtime.config` 留着兼容
+    (以及让手搓 runtime 的单元测试仍能用)。
     """
+    thread_id = ""
     try:
-        cfg = getattr(runtime, "config", None) or {}
-        thread_id = (cfg.get("configurable") or {}).get("thread_id", "")
-        return thread_id.split(":", 1)[0] if ":" in thread_id else ""
+        from langgraph.config import get_config
+
+        thread_id = ((get_config() or {}).get("configurable") or {}).get("thread_id", "")
     except Exception:
-        return ""
+        # 不在图的执行上下文里调用时 get_config() 会抛 —— 属正常,退回下面那条
+        pass
+    if not thread_id:
+        try:
+            cfg = getattr(runtime, "config", None) or {}
+            thread_id = (cfg.get("configurable") or {}).get("thread_id", "")
+        except Exception:
+            return ""
+    return thread_id.split(":", 1)[0] if ":" in thread_id else ""
 
 
 # 工具失败消息的机器可读标记。

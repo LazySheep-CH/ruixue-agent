@@ -158,7 +158,22 @@ def test_cannot_delete_others_memory():
 
 
 class _Rt:
-    """最小 runtime:只带 before_model 真正会读的 config.configurable.thread_id。"""
+    """最小 runtime:只带 before_model 真正会读的 config.configurable.thread_id。
+
+    ⚠ **这个假 runtime 骗过我们一次,别再单独信它。**
+
+    LangGraph 的真 `Runtime` **没有 `.config`**(官方文档:"Runtime does not include
+    config",要用 `langgraph.config.get_config()`)。这个假类特意带了 `.config`,
+    于是下面几条测试全绿,而真实运行里 `_user_id_from` 恒返回空 ——
+    **长期记忆从上线起一次都没注入过**(2026-08-12 实测发现)。
+
+    这些测试仍然有价值:它们验证的是**注入时机与身份隔离的判断逻辑**,那部分是对的。
+    但它们证明不了"接到真框架上能跑"。后者由
+    `tests/test_memory_injection_integration.py` 负责 —— 走真 agent、真 runtime,
+    只把模型换成假的(不花钱、进 CI)。
+
+    **规律:假的输入只能验证你的 if-else,验证不了你对框架的假设。**
+    """
 
     def __init__(self, thread_id):
         self.config = {"configurable": {"thread_id": thread_id}}
