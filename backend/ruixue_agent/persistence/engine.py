@@ -20,7 +20,9 @@ from pathlib import Path
 from dotenv import load_dotenv
 from sqlalchemy import Engine, create_engine
 
-_DOCKER_ENV = Path(__file__).resolve().parent.parent.parent / "docker" / ".env"
+# docker/.env 在【仓库根】(docker 编排属于仓库级,不属于 backend)——
+# 从 backend/ruixue_agent/persistence/ 向上四级。容器内无此文件,凭据走环境变量。
+_DOCKER_ENV = Path(__file__).resolve().parents[3] / "docker" / ".env"
 
 
 def database_url() -> str:

@@ -39,8 +39,8 @@ done
 # ⚠ 大小写必须和 predictors/schema.py 里 MODELS 的 key 一致(DR/WVTR/TS)。
 # Windows 上写小写也能过(NTFS 不区分大小写),Linux 容器里就找不到文件。
 for m in DR WVTR TS; do
-  [ -f "models/predictors/$m/${m}_model.joblib" ] || \
-    die "缺预测模型 models/predictors/$m/,先训练:uv run python scripts/train/train.py $m"
+  [ -f "backend/models/predictors/$m/${m}_model.joblib" ] || \
+    die "缺预测模型 models/predictors/$m/,先训练:cd backend && uv run python scripts/train/train.py $m"
 done
 echo "  ✓ 配置与模型产物齐备"
 
