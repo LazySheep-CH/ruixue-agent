@@ -2,7 +2,6 @@
 
 import {
   ArrowRight,
-  Check,
   ChevronRight,
   CircleAlert,
   Copy,
@@ -22,6 +21,7 @@ import { downloadReport } from "~/core/api";
 import type { Message } from "~/core/types";
 import { renderMarkdown } from "~/lib/markdown";
 
+import { ToolTrace } from "./ToolTrace";
 import { moduleLabels, type WorkspaceModule } from "./workspace-data";
 
 const ResearchPulse = dynamic(
@@ -50,19 +50,6 @@ const prompts: Record<WorkspaceModule, Array<{ title: string; detail: string }>>
     { title: "PBAT/PLA 共混如何影响拉伸性能？", detail: "基于文献材料回答" },
     { title: "总结地膜残留对土壤的主要影响", detail: "整理证据并标注出处" },
   ],
-};
-
-const toolLabels: Record<string, string> = {
-  search_knowledge: "检索专业知识库",
-  estimate_film_usage: "计算地膜用量",
-  get_soil_info: "读取土壤数据",
-  get_climate_info: "分析历史气候",
-  predict_by_location: "运行地域性能预测",
-  predict_degradation: "预测降解率",
-  predict_water_vapor_rate: "预测水汽透过率",
-  predict_tensile_strength: "预测拉伸强度",
-  screen_film_recipes: "批量筛选候选配方",
-  delegate_to_expert: "调用专项研究专家",
 };
 
 export function MessageList({
@@ -147,17 +134,7 @@ export function MessageList({
                   </details>
                 ) : null}
 
-                {message.tools?.length ? (
-                  <div className="tool-trace" aria-label="任务处理过程">
-                    {message.tools.map((tool) => (
-                      <m.div key={tool.name} layout className={tool.done ? "is-done" : "is-running"}>
-                        <span>{tool.done ? <Check size={11} /> : null}</span>
-                        <p>{toolLabels[tool.name] ?? tool.name}</p>
-                        <small>{tool.done ? "完成" : "处理中"}</small>
-                      </m.div>
-                    ))}
-                  </div>
-                ) : null}
+                {message.tools?.length ? <ToolTrace tools={message.tools} /> : null}
 
                 {message.streaming && !message.content && !message.error ? (
                   <div className="assistant-pending" aria-live="polite">

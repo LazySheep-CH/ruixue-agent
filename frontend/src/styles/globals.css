@@ -1681,23 +1681,27 @@ a {
 }
 
 .tool-trace {
-  display: flex;
-  margin: 0 0 18px;
-  flex-direction: column;
-  border-top: 1px solid var(--separator);
+  margin: 2px 0 16px;
 }
 
-.tool-trace > div {
-  display: grid;
-  min-height: 34px;
-  grid-template-columns: 18px minmax(0, 1fr) auto;
+.tool-trace-summary {
+  display: inline-flex;
   align-items: center;
-  gap: 7px;
-  border-bottom: 1px solid var(--separator);
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  padding: 4px 0;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--text-secondary);
 }
 
-.tool-trace > div > span,
-.inspector-tools span {
+.tool-trace-summary:hover { color: var(--text); }
+
+.tool-trace-summary p { margin: 0; font-size: 12.5px; }
+
+.tool-trace-summary > span,
+.tool-trace-list > div > span {
   display: grid;
   width: 16px;
   height: 16px;
@@ -1706,29 +1710,48 @@ a {
 }
 
 .tool-trace .is-done > span,
-.inspector-tools span.is-done {
+.tool-trace-summary span.is-done {
   background: color-mix(in srgb, var(--success) 14%, transparent);
   color: var(--success);
 }
 
-.tool-trace .is-running > span,
-.inspector-tools span.is-running {
-  border: 1.5px solid var(--separator-strong);
-  border-top-color: var(--accent);
-  animation: spin 700ms linear infinite;
+.tool-trace-summary span.is-running,
+.tool-trace-list .is-running > span {
+  color: var(--accent);
 }
 
-.tool-trace p,
-.tool-trace small {
+.tool-trace .spin { animation: spin 900ms linear infinite; }
+
+.tool-trace-summary svg:last-child {
+  transition: transform 0.15s ease;
+  color: var(--text-tertiary);
+}
+
+.tool-trace-summary svg.is-open { transform: rotate(180deg); }
+
+.tool-trace-list {
+  margin: 6px 0 0 7px;
+  padding-left: 14px;
+  border-left: 1px solid var(--separator-strong);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.tool-trace-list > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tool-trace-list p {
   margin: 0;
-  font-size: 10px;
-}
-
-.tool-trace p {
+  font-size: 12px;
   color: var(--text-secondary);
 }
 
-.tool-trace small {
+.tool-trace-list small {
+  font-size: 10px;
   color: var(--text-tertiary);
 }
 
@@ -2017,6 +2040,25 @@ a {
   grid-template-columns: 17px minmax(0, 1fr) auto;
   align-items: center;
   gap: 6px;
+}
+
+.inspector-tools span {
+  display: grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  border-radius: 50%;
+}
+
+.inspector-tools span.is-done {
+  background: color-mix(in srgb, var(--success) 14%, transparent);
+  color: var(--success);
+}
+
+.inspector-tools span.is-running {
+  border: 1.5px solid var(--separator-strong);
+  border-top-color: var(--accent);
+  animation: spin 700ms linear infinite;
 }
 
 .inspector-tools p,
