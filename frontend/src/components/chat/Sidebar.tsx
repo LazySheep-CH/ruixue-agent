@@ -1,18 +1,6 @@
 "use client";
 
-import {
-  ChevronDown,
-  Clock3,
-  FileText,
-  Folder,
-  HelpCircle,
-  LogOut,
-  Plus,
-  Search,
-  Settings,
-  Trash2,
-  X,
-} from "lucide-react";
+import { FileText, LogOut, Plus, Search, Trash2, X } from "lucide-react";
 import { AnimatePresence, m } from "motion/react";
 import { useMemo, useState } from "react";
 
@@ -78,13 +66,10 @@ export function Sidebar({
         </label>
 
         <div className="sidebar-scroll">
-          <div className="sidebar-section-title"><span>项目</span></div>
-          <div className="project-row" aria-label="当前项目">
-            <Folder size={15} />
-            <span>2026 春播研究</span>
-            <ChevronDown size={13} />
-          </div>
-
+          {/* 这里只放真实存在的东西:任务列表。之前的"项目"行是写死的摆设
+              (没有项目功能),"运行说明"是把一次性提示做成了常驻横幅 ——
+              后台续跑该在用户点停止时用 toast 告知,而不是天天挂在侧栏。 */}
+          <div className="sidebar-section-title"><span>任务</span></div>
           <div className="record-list">
             <AnimatePresence initial={false} mode="popLayout">
               {filteredThreads.map((thread) => (
@@ -115,17 +100,11 @@ export function Sidebar({
               <p className="sidebar-empty">{query ? "没有匹配的任务" : "还没有研究任务"}</p>
             ) : null}
           </div>
-
-          <div className="sidebar-section-title sidebar-section-title--recent"><span>运行说明</span></div>
-          <div className="recent-row recent-row--static">
-            <Clock3 size={14} />
-            <span>关闭页面后，后台任务仍会继续</span>
-          </div>
         </div>
 
+        {/* 点不动的"设置/帮助"占位按钮已删:界面上出现的控件就该能用,
+            "即将开放"的灰按钮只会消耗用户的信任。等真有设置项再加回来。 */}
         <footer className="sidebar-footer">
-          <button disabled title="设置功能即将开放"><Settings size={15} /><span>设置</span></button>
-          <button disabled title="帮助功能即将开放"><HelpCircle size={15} /><span>帮助</span></button>
           <button className="sidebar-user" onClick={onLogout} title="退出登录">
             <span className="user-avatar">{username.slice(0, 1).toUpperCase() || "瑞"}</span>
             <span className="sidebar-user__name">{username || "用户"}</span>

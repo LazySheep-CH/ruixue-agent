@@ -315,20 +315,6 @@ a {
   cursor: pointer;
 }
 
-.sidebar-section-title--recent {
-  margin-top: 15px;
-}
-
-.project-row {
-  color: var(--text);
-  font-weight: 550;
-}
-
-.project-row span {
-  min-width: 0;
-  flex: 1;
-}
-
 .record-list {
   display: flex;
   margin: 2px 0 0 15px;
@@ -375,12 +361,6 @@ a {
   font-size: 9px;
 }
 
-.recent-row span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .sidebar-footer {
   display: flex;
   min-height: 48px;
@@ -407,16 +387,6 @@ a {
 .sidebar-footer button:hover {
   background: var(--surface-tertiary);
   color: var(--text);
-}
-
-.sidebar-footer button:disabled {
-  cursor: not-allowed;
-  opacity: 0.46;
-}
-
-.sidebar-footer button:disabled:hover {
-  background: transparent;
-  color: var(--text-secondary);
 }
 
 .user-avatar {
@@ -1429,16 +1399,6 @@ a {
   background: transparent;
 }
 
-.project-row {
-  cursor: default;
-}
-
-.project-row:hover,
-.recent-row--static:hover {
-  background: transparent;
-  color: var(--text-secondary);
-}
-
 .record-row {
   position: relative;
   display: flex;
@@ -1488,13 +1448,6 @@ a {
   color: var(--text-tertiary);
   font-size: 10px;
   line-height: 1.5;
-}
-
-.recent-row--static {
-  height: auto;
-  min-height: 30px;
-  cursor: default;
-  line-height: 1.4;
 }
 
 .sidebar-footer {

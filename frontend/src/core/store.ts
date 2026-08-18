@@ -103,6 +103,13 @@ export const useStore = create<State>()(
       sending: false,
 
       newThread: () => {
+        // 已有空会话就直接切过去 —— 连点"新建"不该堆出一排空的"新对话"
+        const s0 = get();
+        const empty = s0.threads.find((t) => (s0.messages[t.id] ?? []).length === 0);
+        if (empty) {
+          set({ currentThreadId: empty.id });
+          return empty.id;
+        }
         const t: Thread = { id: `t${Date.now()}`, title: "新对话", createdAt: Date.now() };
         set((s) => ({
           threads: [t, ...s.threads],
@@ -268,12 +275,20 @@ export const useStore = create<State>()(
       name: "ruixue-chat",
       version: 1,
       storage: createJSONStorage(() => localStorage),
-      // 只持久化这三项;sending 这类瞬时状态不存
-      partialize: (s) => ({
-        threads: s.threads,
-        messages: s.messages,
-        currentThreadId: s.currentThreadId,
-      }),
+      // 只持久化这三项;sending 这类瞬时状态不存。
+      // 空会话不落盘(当前会话除外):刷新后自动消失,历史列表只留真对话过的,
+      // 也顺带清掉旧版本攒下的空"新对话"。
+      partialize: (s) => {
+        const threads = s.threads.filter(
+          (t) => (s.messages[t.id] ?? []).length > 0 || t.id === s.currentThreadId,
+        );
+        const keep = new Set(threads.map((t) => t.id));
+        return {
+          threads,
+          messages: Object.fromEntries(Object.entries(s.messages).filter(([id]) => keep.has(id))),
+          currentThreadId: s.currentThreadId,
+        };
+      },
     },
   ),
 );
