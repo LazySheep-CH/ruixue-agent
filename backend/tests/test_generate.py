@@ -157,3 +157,52 @@ def test_display_title_falls_back_to_filename_when_extraction_failed():
     # 真标题要保留,别被兜底逻辑误伤
     real = "全生物降解地膜对次生盐碱地滴灌春玉米根区水盐分布的影响"
     assert display_title(real, "whatever.pdf") == real
+
+
+# ── 引用编号校验:编造的引用必须被抓住 ──────────────────────────
+
+
+def test_out_of_range_citation_is_stripped_and_recorded():
+    """给了 5 条材料,答案出现 [7] —— 不需要语义判断,数一数就知道是编的。
+
+    标记必须剔除(留着会误导用户以为有出处),正文一字不动,编号记入返回值。
+    """
+    from ruixue_agent.rag.generate import validate_citations
+
+    text, invalid = validate_citations("断裂伸长率不低于 260% [1],详见标准 [7]。", 5)
+    assert invalid == (7,)
+    assert "[7]" not in text
+    assert "[1]" in text, "合法引用不能误伤"
+    assert "详见标准" in text, "只删标记,正文保留"
+
+
+def test_valid_citations_pass_untouched():
+    from ruixue_agent.rag.generate import validate_citations
+
+    src = "结论一 [1],结论二 [2][3]。"
+    text, invalid = validate_citations(src, 3)
+    assert text == src and invalid == ()
+
+
+def test_zero_citation_is_invalid():
+    """引用从 [1] 起编,[0] 同样是编造。"""
+    from ruixue_agent.rag.generate import validate_citations
+
+    text, invalid = validate_citations("如 [0] 所述。", 4)
+    assert invalid == (0,) and "[0]" not in text
+
+
+def test_duplicated_invalid_numbers_reported_once():
+    from ruixue_agent.rag.generate import validate_citations
+
+    _, invalid = validate_citations("[9] 与 [9] 以及 [8]", 2)
+    assert invalid == (9, 8)
+
+
+def test_fingerprint_covers_citation_rule():
+    """清理规则改了,旧缓存的答案就该失效 —— 指纹必须覆盖它。"""
+    import inspect
+
+    from ruixue_agent.rag import generate
+
+    assert "validate_citations" in inspect.getsource(generate.generation_fingerprint.__wrapped__)

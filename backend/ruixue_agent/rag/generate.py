@@ -10,12 +10,16 @@ from __future__ import annotations
 
 import hashlib
 import inspect
+import logging
+import re
 from dataclasses import dataclass
 from functools import cache
 
 from ruixue_agent.guardrails import wrap_untrusted
 from ruixue_agent.models import create_model
 from ruixue_agent.rag.retriever import Hit
+
+logger = logging.getLogger("ruixue.rag.generate")
 
 _SYSTEM = """你是地膜领域的专业助手,服务于研发、技术服务和质检人员。
 
@@ -49,6 +53,8 @@ class Answer:
     text: str  # 生成的答案
     hits: list[Hit]  # 引用的检索结果,含出处,供核实
     used_context: bool  # 是否检索到了材料
+    # 被剔除的编造引用编号(如给了 5 条材料却出现 [7])。空 = 没发现编造。
+    invalid_citations: tuple[int, ...] = ()
 
 
 def _format_context(hits: list[Hit]) -> str:
@@ -74,6 +80,34 @@ def _format_context(hits: list[Hit]) -> str:
     return wrap_untrusted("\n\n".join(blocks))
 
 
+_CITATION_RE = re.compile(r"\[(\d{1,2})\]")
+
+
+def validate_citations(text: str, n_hits: int) -> tuple[str, tuple[int, ...]]:
+    """剔除答案里编造的引用编号,返回 (清理后文本, 被剔除的编号)。
+
+    给了 5 条材料,答案里出现 [7] —— 这个引用必然是编造的:它不需要任何
+    语义判断,数一数就能确定。这类校验是提示词做不到的(提示是概率性的),
+    也是忠实性检查里唯一零成本、零误报方向的一层:
+        合法编号([1..n]) → 原样保留(内容对不对得上,代码判不了,不越权)
+        越界编号          → 剔除标记本身(留着会误导用户以为有出处),记入返回值
+
+    只处理 1~2 位数字的方括号:与 markdown 任务列表 [x]、链接语法都不冲突;
+    答案里出现三位数编号的场景不存在(k 最大也就两位)。
+    """
+    invalid: list[int] = []
+
+    def _check(m: re.Match) -> str:
+        n = int(m.group(1))
+        if 1 <= n <= n_hits:
+            return m.group(0)
+        invalid.append(n)
+        return ""
+
+    cleaned = _CITATION_RE.sub(_check, text)
+    return cleaned, tuple(dict.fromkeys(invalid))
+
+
 @cache
 def generation_fingerprint() -> str:
     """生成逻辑的指纹 —— 改了系统规则或资料拼装格式,它就变。
@@ -93,7 +127,7 @@ def generation_fingerprint() -> str:
     代价是改个注释也会失效一次 —— 但那只是多花一次调用,
     而漏失效是给用户返回错误答案。宁可多失效,不可少失效。
     """
-    src = inspect.getsource(_format_context)
+    src = inspect.getsource(_format_context) + inspect.getsource(validate_citations)
     return hashlib.sha256((_SYSTEM + src).encode("utf-8")).hexdigest()[:8]
 
 
@@ -143,4 +177,9 @@ class Generator:
                 {"role": "user", "content": prompt},
             ]
         )
-        return Answer(text=resp.content.strip(), hits=hits, used_context=True)
+        text, invalid = validate_citations(resp.content.strip(), len(hits))
+        if invalid:
+            # 编造引用是模型的忠实性失守,必须留痕:评测统计靠 Answer 字段,
+            # 生产排查靠这条日志。剔除的只是编号标记,正文一字不动。
+            logger.warning("答案含编造引用 %s(材料仅 %d 条),已剔除标记", list(invalid), len(hits))
+        return Answer(text=text, hits=hits, used_context=True, invalid_citations=invalid)
