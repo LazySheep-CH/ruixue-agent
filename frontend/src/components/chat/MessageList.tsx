@@ -18,6 +18,7 @@ import { downloadReport } from "~/core/api";
 import type { Message } from "~/core/types";
 import { renderMarkdown } from "~/lib/markdown";
 
+import { ThinkingTrace } from "./ThinkingTrace";
 import { ToolTrace } from "./ToolTrace";
 
 const ResearchPulse = dynamic(
@@ -106,10 +107,7 @@ export function MessageList({
                 </div>
 
                 {message.thinking ? (
-                  <details className="thinking-disclosure">
-                    <summary><Sparkles size={13} /><span>分析思路</span><ChevronRight size={13} /></summary>
-                    <p>{message.thinking}</p>
-                  </details>
+                  <ThinkingTrace text={message.thinking} streaming={!!message.streaming && !message.content} />
                 ) : null}
 
                 {message.tools?.length ? <ToolTrace tools={message.tools} /> : null}

@@ -1556,45 +1556,6 @@ a {
   font-size: 9px;
 }
 
-.thinking-disclosure {
-  margin: 0 0 14px;
-  border-top: 1px solid var(--separator);
-  border-bottom: 1px solid var(--separator);
-}
-
-.thinking-disclosure summary {
-  display: flex;
-  height: 36px;
-  align-items: center;
-  gap: 7px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-size: 11px;
-  list-style: none;
-}
-
-.thinking-disclosure summary::-webkit-details-marker {
-  display: none;
-}
-
-.thinking-disclosure summary svg:last-child {
-  margin-left: auto;
-  transition: transform 180ms ease-out;
-}
-
-.thinking-disclosure[open] summary svg:last-child {
-  transform: rotate(90deg);
-}
-
-.thinking-disclosure p {
-  margin: 0;
-  padding: 0 0 12px 20px;
-  color: var(--text-tertiary);
-  font-size: 11px;
-  line-height: 1.65;
-  white-space: pre-wrap;
-}
-
 .tool-trace {
   margin: 2px 0 16px;
 }
@@ -2467,4 +2428,51 @@ a {
   .login-submit {
     height: 48px;
   }
+}
+
+.thinking-trace { margin: 2px 0 12px; }
+
+.thinking-trace-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  background: transparent;
+  padding: 4px 0;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.thinking-trace-summary:hover { color: var(--text); }
+
+.thinking-trace-summary .pulse { animation: thinking-pulse 1.4s ease-in-out infinite; }
+
+@keyframes thinking-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.thinking-trace-summary svg:last-child {
+  transition: transform 0.15s ease;
+  color: var(--text-tertiary);
+}
+
+.thinking-trace-summary svg.is-open { transform: rotate(180deg); }
+
+.thinking-trace-body {
+  margin: 6px 0 0 7px;
+  padding: 8px 12px 8px 14px;
+  border-left: 2px solid var(--separator-strong);
+  max-height: 180px;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+
+.thinking-trace-body p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-tertiary);
+  white-space: pre-wrap;
 }
