@@ -7,17 +7,14 @@ import { toast } from "sonner";
 
 import { uploadDataset } from "~/core/api";
 
-import { moduleLabels, type WorkspaceModule } from "./workspace-data";
 
 export function Composer({
-  activeModule,
   value,
   onChange,
   onSend,
   onStop,
   sending,
 }: {
-  activeModule: WorkspaceModule;
   value: string;
   onChange: (value: string) => void;
   onSend: () => void;
@@ -92,7 +89,7 @@ export function Composer({
             }
           }}
           aria-label="输入农业问题或任务"
-          placeholder={`继续${moduleLabels[activeModule]}…`}
+          placeholder="输入你的问题,或上传实测数据…"
         />
         <div className="composer-toolbar">
           {/* 隐藏的原生 input:样式没法直接改,所以用按钮触发它。

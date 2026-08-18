@@ -18,15 +18,12 @@ import { useMemo, useState } from "react";
 
 import type { Thread } from "~/core/types";
 
-import { workspaceModules, type WorkspaceModule } from "./workspace-data";
 
 export function Sidebar({
   open,
-  activeModule,
   threads,
   currentThreadId,
   username,
-  onSelectModule,
   onNewThread,
   onSelectThread,
   onDeleteThread,
@@ -34,11 +31,9 @@ export function Sidebar({
   onClose,
 }: {
   open: boolean;
-  activeModule: WorkspaceModule;
   threads: Thread[];
   currentThreadId: string | null;
   username: string;
-  onSelectModule: (module: WorkspaceModule) => void;
   onNewThread: () => void;
   onSelectThread: (id: string) => void;
   onDeleteThread: (id: string) => void;
@@ -55,12 +50,6 @@ export function Sidebar({
   return (
     <>
       <m.aside className={`sidebar${open ? " is-open" : ""}`} aria-label="研究工作区导航">
-        <div className="window-chrome" aria-hidden="true">
-          <span className="traffic traffic--red" />
-          <span className="traffic traffic--yellow" />
-          <span className="traffic traffic--green" />
-        </div>
-
         <div className="sidebar-title">
           <div className="product-switcher">
             <span className="product-glyph">瑞</span>
@@ -87,26 +76,6 @@ export function Sidebar({
             aria-label="搜索任务"
           />
         </label>
-
-        <nav className="module-nav" aria-label="工作模块">
-          {workspaceModules.map((module) => {
-            const Icon = module.icon;
-            const active = activeModule === module.id;
-            return (
-              <button
-                type="button"
-                key={module.id}
-                className={active ? "is-active" : ""}
-                onClick={() => onSelectModule(module.id)}
-                aria-current={active ? "page" : undefined}
-              >
-                {active ? <m.span className="module-nav__active" layoutId="module-active" /> : null}
-                <Icon size={16} strokeWidth={1.8} />
-                <span>{module.label}</span>
-              </button>
-            );
-          })}
-        </nav>
 
         <div className="sidebar-scroll">
           <div className="sidebar-section-title"><span>项目</span></div>

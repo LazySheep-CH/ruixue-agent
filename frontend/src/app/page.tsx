@@ -11,7 +11,6 @@ import { MessageList } from "~/components/chat/MessageList";
 import { Sidebar } from "~/components/chat/Sidebar";
 import { TopBar } from "~/components/chat/TopBar";
 import { WorkspacePanel } from "~/components/chat/WorkspacePanel";
-import type { WorkspaceModule } from "~/components/chat/workspace-data";
 import { checkHealth } from "~/core/api";
 import { clearAuth, getUsername } from "~/core/auth";
 import { useStore } from "~/core/store";
@@ -29,8 +28,6 @@ export default function WorkspacePage() {
   const send = useStore((state) => state.send);
   const stop = useStore((state) => state.stop);
   const resumeIfPending = useStore((state) => state.resumeIfPending);
-
-  const [activeModule, setActiveModule] = useState<WorkspaceModule>("film");
   const [input, setInput] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(true);
@@ -142,14 +139,9 @@ export default function WorkspacePage() {
         <a className="skip-link" href="#workspace-main">跳转到主要内容</a>
         <Sidebar
           open={sidebarOpen}
-          activeModule={activeModule}
           threads={mounted ? threads : []}
           currentThreadId={currentThreadId}
           username={mounted ? getUsername() : ""}
-          onSelectModule={(module) => {
-            setActiveModule(module);
-            if (window.matchMedia("(max-width: 720px)").matches) setSidebarOpen(false);
-          }}
           onNewThread={handleNewThread}
           onSelectThread={(id) => {
             selectThread(id);
@@ -162,7 +154,6 @@ export default function WorkspacePage() {
 
         <m.main id="workspace-main" className="app-main" layout>
           <TopBar
-            activeModule={activeModule}
             title={currentTitle}
             inspectorOpen={inspectorOpen}
             sending={sending}
@@ -173,7 +164,6 @@ export default function WorkspacePage() {
           />
           {mounted ? (
             <MessageList
-              activeModule={activeModule}
               messages={currentMessages}
               sending={sending}
               onPick={setInput}
@@ -181,7 +171,6 @@ export default function WorkspacePage() {
             />
           ) : <div className="workspace-scroll" />}
           <Composer
-            activeModule={activeModule}
             value={input}
             onChange={setInput}
             onSend={() => void runTask(input)}
@@ -195,7 +184,6 @@ export default function WorkspacePage() {
 
         <WorkspacePanel
           open={inspectorOpen}
-          activeModule={activeModule}
           title={currentTitle}
           messages={currentMessages}
           running={sending}

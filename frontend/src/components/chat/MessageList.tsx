@@ -5,10 +5,7 @@ import {
   ChevronRight,
   CircleAlert,
   Copy,
-  Database,
   FileDown,
-  FlaskConical,
-  MapPin,
   RotateCcw,
   Sparkles,
 } from "lucide-react";
@@ -22,44 +19,25 @@ import type { Message } from "~/core/types";
 import { renderMarkdown } from "~/lib/markdown";
 
 import { ToolTrace } from "./ToolTrace";
-import { moduleLabels, type WorkspaceModule } from "./workspace-data";
 
 const ResearchPulse = dynamic(
   () => import("./ResearchPulse").then((module) => module.ResearchPulse),
   { ssr: false },
 );
 
-const prompts: Record<WorkspaceModule, Array<{ title: string; detail: string }>> = {
-  overview: [
-    { title: "诊断棉花苗期黄叶", detail: "结合叶位、灌溉和分布范围逐步排查" },
-    { title: "估算 100 亩棉田地膜用量", detail: "按材料类型和厚度计算" },
-    { title: "解释滴灌带堵塞原因", detail: "给出现场检查顺序与处理建议" },
-  ],
-  film: [
-    { title: "为新疆尉犁县春播棉花推荐可降解地膜，覆盖约 90 天", detail: "联合环境、性能模型和文献依据" },
-    { title: "比较 8 μm、10 μm、12 μm 三种厚度", detail: "对比强度、保墒和降解风险" },
-    { title: "筛选 PBAT/PLA 候选配方", detail: "批量试算并解释性能取舍" },
-  ],
-  field: [
-    { title: "棉花苗期新叶发黄、叶脉仍绿，先排查什么？", detail: "缺素、根系与灌溉诊断" },
-    { title: "覆膜后土壤温度过高怎么办？", detail: "结合作物阶段给出处置顺序" },
-    { title: "地膜提前出现裂纹是否正常？", detail: "判断材料、环境与施工因素" },
-  ],
-  knowledge: [
-    { title: "检索全生物降解地膜厚度相关标准", detail: "返回标准名称、年份和依据" },
-    { title: "PBAT/PLA 共混如何影响拉伸性能？", detail: "基于文献材料回答" },
-    { title: "总结地膜残留对土壤的主要影响", detail: "整理证据并标注出处" },
-  ],
-};
+const prompts: Array<{ title: string; detail: string }> = [
+  { title: "为新疆尉犁县春播棉花推荐可降解地膜，覆盖约 150 天", detail: "联合环境、性能模型和文献依据" },
+  { title: "估算 100 亩棉田地膜用量", detail: "按材料类型和厚度计算" },
+  { title: "地膜提前出现裂纹是否正常？", detail: "判断材料、环境与施工因素" },
+  { title: "检索全生物降解地膜厚度相关标准", detail: "返回标准名称、年份和依据" },
+];
 
 export function MessageList({
-  activeModule,
   messages,
   sending,
   onPick,
   onRetry,
 }: {
-  activeModule: WorkspaceModule;
   messages: Message[];
   sending: boolean;
   onPick: (question: string) => void;
@@ -90,7 +68,7 @@ export function MessageList({
   return (
     <div className="workspace-scroll">
       <div className="workspace-canvas">
-        {messages.length === 0 ? <EmptyWorkspace activeModule={activeModule} onPick={onPick} /> : null}
+        {messages.length === 0 ? <EmptyWorkspace onPick={onPick} /> : null}
 
         <AnimatePresence initial={false} mode="popLayout">
           {messages.map((message, index) => {
@@ -204,36 +182,26 @@ export function MessageList({
 }
 
 function EmptyWorkspace({
-  activeModule,
   onPick,
 }: {
-  activeModule: WorkspaceModule;
   onPick: (question: string) => void;
 }) {
-  const icons = {
-    overview: Sparkles,
-    film: FlaskConical,
-    field: MapPin,
-    knowledge: Database,
-  };
-  const Icon = icons[activeModule];
-
   return (
     <m.article
-      key={activeModule}
+      key="empty" 
       className="empty-workspace empty-workspace--research"
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
     >
       <div className="empty-workspace__signal">
-        <span className="empty-icon"><Icon size={17} /></span>
+        <span className="empty-icon"><Sparkles size={17} /></span>
         <ResearchPulse running={false} />
       </div>
-      <p className="workspace-eyebrow">{moduleLabels[activeModule]}</p>
-      <h1>{emptyTitle(activeModule)}</h1>
-      <p>{emptyDescription(activeModule)}</p>
+      <p className="workspace-eyebrow">研究工作台</p>
+      <h1>今天要解决什么问题？</h1>
+      <p>一个入口完成选型、预测、诊断、知识检索与数据分析 —— 系统自行决定调用哪些工具。</p>
       <div className="prompt-list">
-        {prompts[activeModule].map((prompt, index) => (
+        {prompts.map((prompt, index) => (
           <m.button
             key={prompt.title}
             onClick={() => onPick(prompt.title)}
@@ -258,16 +226,4 @@ function findPreviousQuestion(messages: Message[], index: number): string | null
   return null;
 }
 
-function emptyTitle(module: WorkspaceModule): string {
-  if (module === "film") return "从场景开始一项地膜研究";
-  if (module === "field") return "描述现场现象，建立排查路径";
-  if (module === "knowledge") return "检索标准、文献与专业依据";
-  return "今天要解决什么农业问题？";
-}
 
-function emptyDescription(module: WorkspaceModule): string {
-  if (module === "film") return "提供地点、作物、覆盖周期和材料偏好，系统会调取环境、模型和知识依据。";
-  if (module === "field") return "建议说明地点、作物、生育阶段、异常部位和最近的田间操作。";
-  if (module === "knowledge") return "回答会标注文献标题、年份和章节；资料不足时会明确说明。";
-  return "一个入口完成快速问答、计算、知识检索和多步骤研究任务。";
-}

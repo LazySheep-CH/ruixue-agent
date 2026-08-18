@@ -5,10 +5,8 @@ import { m } from "motion/react";
 
 import { ThemeToggle } from "~/components/ThemeToggle";
 
-import { moduleLabels, type WorkspaceModule } from "./workspace-data";
 
 export function TopBar({
-  activeModule,
   title,
   inspectorOpen,
   sending,
@@ -17,7 +15,6 @@ export function TopBar({
   onToggleInspector,
   onShare,
 }: {
-  activeModule: WorkspaceModule;
   title: string;
   inspectorOpen: boolean;
   sending: boolean;
@@ -33,7 +30,6 @@ export function TopBar({
           <PanelLeft size={17} />
         </button>
         <div className="document-path" title={title}>
-          <span>{moduleLabels[activeModule]}</span>
           <b>/</b>
           <strong>{title}</strong>
         </div>

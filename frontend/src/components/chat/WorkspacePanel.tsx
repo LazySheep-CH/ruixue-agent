@@ -14,20 +14,17 @@ import { AnimatePresence, m } from "motion/react";
 
 import type { Message } from "~/core/types";
 
-import { moduleLabels, type WorkspaceModule } from "./workspace-data";
 
 const inspectorTransition = { type: "spring" as const, stiffness: 390, damping: 36, mass: 0.85 };
 
 export function WorkspacePanel({
   open,
-  activeModule,
   title,
   messages,
   running,
   onClose,
 }: {
   open: boolean;
-  activeModule: WorkspaceModule;
   title: string;
   messages: Message[];
   running: boolean;
@@ -63,7 +60,6 @@ export function WorkspacePanel({
               </span>
               <div>
                 <strong>{running ? "后台任务执行中" : messages.length ? "任务已保存" : "等待任务"}</strong>
-                <small>{moduleLabels[activeModule]}</small>
               </div>
             </div>
 
@@ -71,7 +67,6 @@ export function WorkspacePanel({
               <h2>当前任务</h2>
               <dl>
                 <div><dt><FileText size={13} />标题</dt><dd>{title}</dd></div>
-                <div><dt><Layers3 size={13} />模块</dt><dd>{moduleLabels[activeModule]}</dd></div>
                 <div><dt><MessageSquareText size={13} />消息</dt><dd>{messages.length} 条</dd></div>
                 {lastAssistant?.runId ? (
                   <div><dt><Activity size={13} />运行编号</dt><dd className="inspector-run-id">{lastAssistant.runId}</dd></div>
