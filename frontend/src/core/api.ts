@@ -165,6 +165,31 @@ export async function uploadKbDoc(
   return (await resp.json()) as { doc_id: string; filename: string; n_chunks: number };
 }
 
+export interface KbDoc {
+  doc_id: string;
+  filename: string;
+  n_chunks: number;
+  created_at: string;
+}
+
+/** 列出我的知识库资料。 */
+export async function listKbDocs(): Promise<KbDoc[]> {
+  const resp = await fetch(`${BASE}/kb/docs`, {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  if (!resp.ok) throw new ApiError(resp.status, humanize(resp.status));
+  return ((await resp.json()) as { docs: KbDoc[] }).docs;
+}
+
+/** 删除一份资料(含全部切块与向量)。 */
+export async function deleteKbDoc(docId: string): Promise<void> {
+  const resp = await fetch(`${BASE}/kb/docs/${docId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  if (!resp.ok) throw new ApiError(resp.status, humanize(resp.status));
+}
+
 /** 读一条 SSE 响应,逐事件回调。streamChat 与 resumeRun 共用。 */
 async function consumeSse(resp: Response, onEvent: (e: StreamEvent) => void): Promise<void> {
   if (!resp.ok || !resp.body) {

@@ -6,6 +6,8 @@ import { useMemo, useState } from "react";
 
 import type { Thread } from "~/core/types";
 
+import { KbDocs } from "./KbDocs";
+
 
 export function Sidebar({
   open,
@@ -100,6 +102,8 @@ export function Sidebar({
               <p className="sidebar-empty">{query ? "没有匹配的任务" : "还没有研究任务"}</p>
             ) : null}
           </div>
+
+          <KbDocs />
         </div>
 
         {/* 点不动的"设置/帮助"占位按钮已删:界面上出现的控件就该能用,

@@ -361,6 +361,12 @@ def _sse(event: dict) -> str:
     return f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
 
+_SSE_HEADERS = {
+    "X-Accel-Buffering": "no",  # nginx:不缓冲
+    "Cache-Control": "no-cache, no-transform",  # 压缩层:不压缩(压缩=缓冲=直播失效)
+}
+
+
 def _stream_run(run_id: str, from_start: bool):
     """把某个 Run 的事件流转成 SSE。from_start=True 时从头补发(重连场景)。"""
 
@@ -388,9 +394,14 @@ def _stream_run(run_id: str, from_start: bool):
     # X-Accel-Buffering 是响应头:由后端贴在响应上、代理读它。
     # 曾配反过 —— 写成 nginx 的 proxy_set_header(那是贴在"寄给后端的请求"上,
     # 后端看了也没用),流式一直只靠 proxy_buffering off 单锁在撑。
-    return StreamingResponse(
-        gen(), media_type="text/event-stream", headers={"X-Accel-Buffering": "no"}
-    )
+    #
+    # no-transform 是第二把锁,针对的是【压缩】而不是代理缓冲:
+    # 浏览器请求都带 Accept-Encoding: gzip,链路上任何一层压缩中间件
+    # (Next 开发代理就有)都会为了攒压缩块把 SSE 事件整段扣住 ——
+    # 实测 1876 个事件全部在结束时一次性倒出,推理直播、工具进度、
+    # 打字机效果全数失效,而且 curl 测不出来(curl 默认不带 gzip)。
+    # 规范的压缩层见到 Cache-Control: no-transform 会原样放行。
+    return StreamingResponse(gen(), media_type="text/event-stream", headers=_SSE_HEADERS)
 
 
 @app.post("/chat/stream")
@@ -481,7 +492,7 @@ def resume_run_stream(run_id: str, user_id: str = Depends(get_current_user)):
                 ]
             ),
             media_type="text/event-stream",
-            headers={"X-Accel-Buffering": "no"},
+            headers=_SSE_HEADERS,
         )
     return _stream_run(run_id, from_start=True)
 

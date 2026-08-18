@@ -7,6 +7,8 @@ import { toast } from "sonner";
 
 import { uploadDataset, uploadKbDoc } from "~/core/api";
 
+import { KB_CHANGED_EVENT } from "./KbDocs";
+
 
 export function Composer({
   value,
@@ -42,6 +44,7 @@ export function Composer({
         toast.success(`已加入你的知识库《${d.filename}》`, {
           description: `解析为 ${d.n_chunks} 个片段,之后的提问会自动引用你的资料。`,
         });
+        window.dispatchEvent(new Event(KB_CHANGED_EVENT)); // 通知侧栏"我的资料"刷新
         inputRef.current?.focus();
         return;
       }

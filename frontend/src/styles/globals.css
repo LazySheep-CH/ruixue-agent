@@ -2429,3 +2429,35 @@ a {
   color: var(--text-tertiary);
   white-space: pre-wrap;
 }
+
+/* ── 侧栏"我的资料"(用户知识库入口)────────────────────── */
+.kb-docs {
+  margin-top: 16px;
+}
+
+.kb-docs__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.kb-docs__title button {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  place-items: center;
+}
+
+.kb-docs__title button:hover {
+  background: var(--surface-tertiary);
+  color: var(--text);
+}
+
+.kb-docs__list .record-row button {
+  cursor: default;
+}
