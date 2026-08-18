@@ -27,6 +27,8 @@ const TOOL_LABELS: Record<string, string> = {
   compare_dataset_with_model: "对比实测与模型预测",
   detect_dataset_outliers: "检查数据异常值",
   check_dataset_against_standard: "核对国标符合性",
+  search_web: "联网搜索",
+  read_webpage: "阅读网页内容",
 };
 
 function labelOf(name: string): string {

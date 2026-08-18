@@ -12,6 +12,7 @@ from ruixue_agent.tools.environment import get_environment_tools
 from ruixue_agent.tools.optimize import get_optimize_tools
 from ruixue_agent.tools.predictor import get_predictor_tools
 from ruixue_agent.tools.rag import search_knowledge
+from ruixue_agent.tools.web import get_web_tools
 
 
 def get_tools() -> list[BaseTool]:
@@ -27,6 +28,7 @@ def get_tools() -> list[BaseTool]:
         *get_environment_tools(),  # 环境查询:土壤(离线)/ 气候(NASA 在线)
         *get_predictor_tools(),  # 性能预测:按地点综合 + 降解率/透过率/拉伸强度
         *get_optimize_tools(),  # 配方批量试算(对比表);权衡推荐见「配方优化专家」
+        *get_web_tools(),  # 联网搜索 + 读网页:知识库覆盖不到的实时信息(行情/新品/新闻)
         # 上传数据:主 agent 只留看概览这一个。
         #
         # 实测:4 个数据集工具的 schema 共 2467 字,占全部工具 schema 的 22% ——
@@ -41,5 +43,4 @@ def get_tools() -> list[BaseTool]:
         # 调研结论(已实测):淘宝/京东/1688/一亩田均有反爬,直接爬不通;
         #   合规路径是平台开放平台 API(需企业资质)或行情数据服务(付费)。
         #   更关键的是零售价 ≠ 农业大宗价,直接用会严重高估,故不急于自动化。
-        # 待做web_search:见 tools/web.py 占位
     ]
