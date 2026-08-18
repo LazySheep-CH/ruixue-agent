@@ -380,3 +380,49 @@ class DatasetRow(Base):
         Index("idx_datasets_user_time", "user_id", "created_at"),
         {"comment": "用户上传的实测数据表。一行 = 一次上传"},
     )
+
+
+class UserDocRow(Base):
+    """用户上传的知识文档(PDF/TXT/MD)。一行 = 一份文档。
+
+    正文不存这张表:切块后的文本在 user_doc_chunks,向量在 Milvus。
+    这行只承担列表页和配额统计,所以字段克制 —— 文件名、块数、时间。
+    归属与不落盘的理由同 DatasetRow,不再重复。
+    """
+
+    __tablename__ = "user_docs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    doc_id: Mapped[str] = mapped_column(String(36), unique=True, index=True, nullable=False)
+    user_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    n_chunks: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+
+    __table_args__ = (
+        Index("idx_user_docs_user_time", "user_id", "created_at"),
+        {"comment": "用户知识库文档。一行 = 一次上传"},
+    )
+
+
+class UserDocChunkRow(Base):
+    """用户文档的切块正文。检索命中 chunk_id 后从这里取原文。
+
+    不复用平台的 chunks 表:那张表的形状(父子块、tsv、章节路径)是给
+    MinerU 结构化产物设计的,用户裸文本用不上;更重要的是平台语料没有
+    user_id,混在一张表里,每条平台检索都要背一个"别把用户块查出来"的
+    过滤条件 —— 忘一处就是泄露。分表让隔离成为默认而不是纪律。
+    """
+
+    __tablename__ = "user_doc_chunks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    chunk_id: Mapped[str] = mapped_column(String(36), unique=True, index=True, nullable=False)
+    doc_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
+    user_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+
+    __table_args__ = ({"comment": "用户文档切块。检索走 Milvus,这里存正文"},)

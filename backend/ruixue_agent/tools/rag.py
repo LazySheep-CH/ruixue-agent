@@ -76,11 +76,19 @@ def search_knowledge(question: str) -> str:
     # 缓存版本 = 知识库版本 + 生成逻辑版本。
     # 只用知识库版本是不够的:改了系统规则或资料拼装格式,同一问题就该有不同答案,
     # 而旧缓存会照样命中 —— 改动对老用户静默失效。详见 generate.generation_fingerprint。
+    # 用户自有知识库先召回。命中了就整条旁路缓存(读和写都不碰):
+    # 缓存键只有 question + 版本,没有用户维度 —— 带着 A 的私有资料生成的答案
+    # 一旦入缓存,B 问同一个问题就会命中,这是跨用户泄露,不是效果问题。
+    # 给缓存键加 user_id 也可以,但会把公共问题的缓存按用户裂开,收益倒挂;
+    # 有私有材料的问答本来就该每次现算。
+    user_hits = _user_kb_hits(question)
+
     kb_ver = f"{_kb_version()}|{generation_fingerprint()}"
-    cached = cache.get(question, kb_ver)
-    if cached is not None:
-        logger.info("知识问答命中缓存")
-        return cached
+    if not user_hits:
+        cached = cache.get(question, kb_ver)
+        if cached is not None:
+            logger.info("知识问答命中缓存")
+            return cached
 
     # 每次调用开一个新会话:repo/bm25 绑在会话上,会话结束自动释放
     with Session(get_engine()) as sess:
@@ -90,17 +98,32 @@ def search_knowledge(question: str) -> str:
             bm25=Bm25Search(sess),  # 混合检索(向量 + 词法)
             reranker=_get_reranker(),  # cross-encoder 精排
         )
-        ans = Generator(retriever).answer(question, k=4)
+        ans = Generator(retriever).answer(question, k=4, extra_hits=user_hits)
 
     # 没检索到资料时,Generator 已返回兜底话术,直接回传
     if not ans.used_context:
         return ans.text  # 兜底话术不缓存:知识库补充后同一问题应能重新检索
 
-    # 附上出处,便于用户/agent 核实答案来源
+    # 附上出处,便于用户/agent 核实答案来源。
+    # 用户资料的 title 自带"您上传的资料"前缀,出处列表里天然分得清两类来源。
     sources = []
     for i, h in enumerate(ans.hits, start=1):
         path = " > ".join(h.section_path[:2]) if h.section_path else ""
-        sources.append(f"[{i}] {h.document_id}" + (f" · {path}" if path else ""))
+        name = h.title if (h.title or "").startswith("您上传的资料") else h.document_id
+        sources.append(f"[{i}] {name}" + (f" · {path}" if path else ""))
     result = ans.text + "\n\n出处:\n" + "\n".join(sources)
-    cache.put(question, kb_ver, result)
+    if not user_hits:  # 含私有材料的答案不入公共缓存(理由见上)
+        cache.put(question, kb_ver, result)
     return result
+
+
+def _user_kb_hits(question: str):
+    """当前用户的自有资料召回。拿不到身份或检索失败都返回空 —— 增益不拖主流程。"""
+    from ruixue_agent.agents.middlewares import _user_id_from
+
+    user_id = _user_id_from(None)
+    if not user_id:
+        return []
+    from ruixue_agent import userkb
+
+    return userkb.search_as_hits(user_id, question)

@@ -206,3 +206,18 @@ def test_fingerprint_covers_citation_rule():
     from ruixue_agent.rag import generate
 
     assert "validate_citations" in inspect.getsource(generate.generation_fingerprint.__wrapped__)
+
+
+def test_extra_hits_are_appended_and_citable():
+    """用户库材料追加在平台命中之后,编号连续,引用校验按合并后的总数算。"""
+    platform = [_hit("c1", "平台资料")]
+    user = [_hit("u1", "用户资料")]
+    g = _gen(platform)
+
+    class R:
+        content = "结论 [2]。"
+
+    g.llm = type("L", (), {"invoke": lambda self, m: R()})()
+    ans = g.answer("问题", extra_hits=user)
+    assert [h.chunk_id for h in ans.hits] == ["c1", "u1"]
+    assert ans.invalid_citations == ()  # [2] 指向用户材料,是合法引用

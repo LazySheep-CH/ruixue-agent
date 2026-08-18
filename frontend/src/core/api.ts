@@ -144,6 +144,27 @@ export async function uploadDataset(file: File): Promise<DatasetSummary> {
   return (await resp.json()) as DatasetSummary;
 }
 
+/** 上传个人资料(PDF/TXT/MD)入用户知识库。错误处理约定同 uploadDataset。 */
+export async function uploadKbDoc(
+  file: File,
+): Promise<{ doc_id: string; filename: string; n_chunks: number }> {
+  const form = new FormData();
+  form.append("file", file);
+  const resp = await fetch(`${BASE}/kb/docs`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${getToken()}` },
+    body: form,
+  });
+  if (!resp.ok) {
+    const detail = await resp
+      .json()
+      .then((b: { detail?: string }) => b.detail)
+      .catch(() => undefined);
+    throw new ApiError(resp.status, detail || humanize(resp.status));
+  }
+  return (await resp.json()) as { doc_id: string; filename: string; n_chunks: number };
+}
+
 /** 读一条 SSE 响应,逐事件回调。streamChat 与 resumeRun 共用。 */
 async function consumeSse(resp: Response, onEvent: (e: StreamEvent) => void): Promise<void> {
   if (!resp.ok || !resp.body) {

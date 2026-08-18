@@ -556,3 +556,59 @@ def delete_dataset(dataset_id: str, user_id: str = Depends(get_current_user)) ->
     if not ds_store.delete_one(dataset_id, user_id):
         raise HTTPException(status_code=404, detail="数据集不存在")
     return {"ok": True}
+
+
+# ── 用户知识库(/kb/docs)────────────────────────────────────────
+# 和 /datasets 同一套纪律:体积双重闸门、422 透传用户可读的错误、
+# 归属不匹配一律 404。区别只在入库管线(切块+向量化)在 userkb 里。
+
+
+@app.post("/kb/docs")
+async def upload_kb_doc(
+    file: UploadFile = File(...),
+    user_id: str = Depends(get_current_user),
+) -> dict:
+    """上传一份个人资料(PDF/TXT/MD),入我的知识库,之后问答自动引用。"""
+    from ruixue_agent import userkb
+
+    limit_mb = userkb.MAX_DOC_BYTES // 1024 // 1024
+    if (file.size or 0) > userkb.MAX_DOC_BYTES:
+        raise HTTPException(status_code=413, detail=f"文件超过 {limit_mb}MB 上限")
+    raw = await file.read()
+    if len(raw) > userkb.MAX_DOC_BYTES:  # 复核:声明的长度不可信
+        raise HTTPException(status_code=413, detail=f"文件超过 {limit_mb}MB 上限")
+
+    try:
+        info = userkb.ingest(user_id, file.filename or "文档", raw)
+    except userkb.UserKbError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    logger.info("用户 %s 入库资料 %s", user_id, info["doc_id"])
+    return info
+
+
+@app.get("/kb/docs")
+def list_kb_docs(user_id: str = Depends(get_current_user)) -> dict:
+    """列出我的资料。"""
+    from ruixue_agent import userkb
+
+    return {
+        "docs": [
+            {
+                "doc_id": d.doc_id,
+                "filename": d.filename,
+                "n_chunks": d.n_chunks,
+                "created_at": d.created_at.isoformat(),
+            }
+            for d in userkb.list_docs(user_id)
+        ]
+    }
+
+
+@app.delete("/kb/docs/{doc_id}")
+def delete_kb_doc(doc_id: str, user_id: str = Depends(get_current_user)) -> dict:
+    """删除我的一份资料(含全部切块与向量)。不属于我的一律 404。"""
+    from ruixue_agent import userkb
+
+    if not userkb.delete_doc(user_id, doc_id):
+        raise HTTPException(status_code=404, detail="资料不存在")
+    return {"ok": True}

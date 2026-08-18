@@ -158,8 +158,16 @@ class Generator:
         k: int = 5,
         year_min: int | None = None,
         source: str | None = None,
+        extra_hits: list[Hit] | None = None,
     ) -> Answer:
+        """extra_hits:调用方额外注入的材料(目前是用户自有知识库的召回)。
+
+        追加在平台命中之后而不是混排:两边的相关度分数来自不同的检索路径
+        (平台走混合检索+重排,用户库是纯向量余弦),数值没有可比性,
+        硬排一起等于随机排序。位置靠后不影响引用 —— 编号连续,模型都看得到。
+        """
         hits = self.retriever.search(question, k=k, year_min=year_min, source=source)
+        hits = list(hits) + list(extra_hits or [])
 
         # 未检索到材料时直接返回,不调用模型 —— 空上下文下模型只能凭记忆作答,
         # 恰是最不可控的路径,同时省一次调用

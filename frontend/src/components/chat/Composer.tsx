@@ -5,7 +5,7 @@ import { AnimatePresence, m } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { uploadDataset } from "~/core/api";
+import { uploadDataset, uploadKbDoc } from "~/core/api";
 
 
 export function Composer({
@@ -34,6 +34,17 @@ export function Composer({
   async function handleUpload(file: File) {
     setUploading(true);
     try {
+      // 一个附件入口,按扩展名分流:表格是"待分析的数据",文档是"入库的知识",
+      // 两者后端管线完全不同。让用户自己选类型是把内部结构暴露给他 —— 文件名
+      // 已经说明了一切。
+      if (/\.(pdf|txt|md)$/i.test(file.name)) {
+        const d = await uploadKbDoc(file);
+        toast.success(`已加入你的知识库《${d.filename}》`, {
+          description: `解析为 ${d.n_chunks} 个片段,之后的提问会自动引用你的资料。`,
+        });
+        inputRef.current?.focus();
+        return;
+      }
       const s = await uploadDataset(file);
       const missed = s.unrecognized_columns.length
         ? `,未识别的列:${s.unrecognized_columns.join("、")}`
@@ -98,7 +109,7 @@ export function Composer({
           <input
             ref={fileRef}
             type="file"
-            accept=".csv,text/csv"
+            accept=".csv,.pdf,.txt,.md,text/csv,application/pdf,text/plain,text/markdown"
             hidden
             onChange={(event) => {
               const f = event.target.files?.[0];
@@ -113,8 +124,8 @@ export function Composer({
             className="composer-icon"
             disabled={uploading || sending}
             onClick={() => fileRef.current?.click()}
-            aria-label="上传实测数据表(CSV)"
-            title="上传实测数据表(CSV)"
+            aria-label="上传实测数据(CSV)或个人资料(PDF/TXT/MD)"
+            title="上传实测数据(CSV)或个人资料(PDF/TXT/MD)"
           >
             <Paperclip size={16} />
           </button>
