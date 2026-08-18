@@ -47,6 +47,8 @@ backend/                       # Python 侧(harness 与 app 分离)
 │   ├── subagents.py           4 位专家子 agent(文献检索/配方优化/故障诊断/数据分析)
 │   ├── memory/                长期记忆:运行后抽取事实,PG 存权威 + 向量召回,按用户隔离
 │   ├── analysis/              上传数据:列名归一 → 契约校验 → 入库 → 统计与模型对比
+│   ├── userkb/                用户自有知识库:上传 PDF/TXT/MD → 切块向量化 → 隔离检索,
+│   │                          问答自动引用并标注「您上传的资料」
 │   ├── predictors/            三个自训性能预测模型(降解率/透过率/拉伸强度)+ 环境取数
 │   ├── mcp/                   MCP 客户端:按配置接入外部工具,连不上自动降级
 │   ├── skills/                技能(SOP)按需注入
@@ -56,7 +58,7 @@ backend/                       # Python 侧(harness 与 app 分离)
 │   ├── rag/                   在线检索:向量+BM25 → RRF → 重排 → 带引用生成
 │   └── models.py · checkpointer.py · config.py · guardrails/
 ├── ruixue_app/                APP:FastAPI 服务层,依赖 harness,反向不行
-│   ├── main.py                /chat(SSE)· /datasets · /metrics · 报告导出 · 健康探针
+│   ├── main.py                /chat(SSE)· /datasets · /kb/docs · /metrics · 报告导出 · 健康探针
 │   ├── runs.py                异步 Run:后台线程池 + Redis Stream,断线续跑/重连补发
 │   ├── auth.py · quota.py     JWT / API Key · 每日配额(fail-open)
 │   ├── mcp_server.py          MCP 服务端:把自有能力暴露给外部 agent(默认关闭)
