@@ -2,27 +2,13 @@
 
 [![CI](https://github.com/LazySheep-CH/ruixue-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/LazySheep-CH/ruixue-agent/actions/workflows/ci.yml)
 
-地膜领域的中文智能体。用户用自然语言提问（选膜、性能、田间问题、标准条文），
-agent 自己决定查土壤气候、调预测模型还是检索文献，答案带引用出处。
-后端 FastAPI + LangChain，支持多轮对话、断线续跑、流式输出，前端是 Next.js 聊天界面。
+我在江苏省农科院实习期间做的项目。地膜领域的中文智能体：用自然语言提问（选膜、性能、
+田间问题、标准条文），agent 自己决定查土壤气候、调预测模型还是检索文献，答案带引用出处。
+后端 FastAPI + LangChain，前端 Next.js。
 
-## 指标
-
-| 环节 | 数据 |
-| --- | --- |
-| 语料 | 1,578 篇文献/标准，切成 262,782 个检索块 |
-| 向量 | 223,386 条（bge-small-zh-v1.5，512 维） |
-| 检索 | Recall@1 0.769 / Recall@10 0.979 / MRR 0.849（向量+BM25+重排） |
-| 逐层增益 | 纯向量 0.593，加混合 0.631，加重排 0.769 |
-| Agent 评测 | 33 题冻结集 32/33，工具选择 recall 1.000 / precision 0.921，噪声地板 0% |
-| 能力 | 16 个工具，4 位专家子 agent，3 个自训预测模型，MCP 双向 |
-| 记忆 | 12 题跨会话对照，任务完成率 44.4% 提到 77.8% |
-| 安全 | 10 类攻击场景专项评测，10/10 拦截 |
-| 测试 | 505 个 |
-
-检索指标来自 338 题评测集（290 题计入 Recall，48 题不可答用来验证拒答），
-评测方法见 [docs/评测方法.md](docs/评测方法.md) 和 [docs/Agent评测方法.md](docs/Agent评测方法.md)。
-数字以 `scripts/run_eval.py --ab` 的输出为准。
+几个主要数字：语料 1,578 篇文献和标准，检索 Recall@1 0.769（338 题评测集），
+agent 端到端评测 32/33，自动化测试 505 个。
+完整指标和评测方法见 [docs/评测方法.md](docs/评测方法.md)、[docs/Agent评测方法.md](docs/Agent评测方法.md)。
 
 ## 架构
 
@@ -116,11 +102,10 @@ cd frontend && npm install && npm run dev
 
 ## 已知问题
 
-- checkpointer 建表没走 Alembic，迁移历史不完整 [#17](https://github.com/LazySheep-CH/ruixue-agent/issues/17)
-- config.yaml 缺 key 报裸 KeyError [#18](https://github.com/LazySheep-CH/ruixue-agent/issues/18)
-- BM25 的 DF 阈值会误伤 pbat 这类专业缩写 [#19](https://github.com/LazySheep-CH/ruixue-agent/issues/19)
 - 评测 rf02 稳定失败：用户问题带错误前提时 agent 不会先纠正 [#20](https://github.com/LazySheep-CH/ruixue-agent/issues/20)
 - 嵌入模型每个 worker 各载一份，内存是扩容瓶颈 [#21](https://github.com/LazySheep-CH/ruixue-agent/issues/21)
+
+其余见 [issues](https://github.com/LazySheep-CH/ruixue-agent/issues)。
 
 ## 后面想做的
 
