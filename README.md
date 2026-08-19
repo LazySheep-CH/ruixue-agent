@@ -2,11 +2,11 @@
 
 [![CI](https://github.com/LazySheep-CH/ruixue-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/LazySheep-CH/ruixue-agent/actions/workflows/ci.yml)
 
-地膜领域的中文智能体：用自然语言提问（选膜、性能、
-田间问题、标准条文），agent 自己决定查土壤气候、调预测模型还是检索文献，答案带引用出处。
+地膜领域的中文智能体。用自然语言提问（选膜、性能、田间问题、标准条文），
+提问由 agent 循环处理，模型决定调用知识检索、环境数据查询还是性能预测，答案带引用出处。
 后端 FastAPI + LangChain，前端 Next.js。
 
-语料整理了 1,500 多篇文献和标准，检索 Recall@1 做到 0.769（338 题评测集），
+语料整理了 1,500 多篇文献和标准。在 338 题评测集上做过检索评测，Recall@1 是 0.769；
 另外有一套 agent 端到端评测和五百多个自动化测试。
 指标明细和评测方法在 [docs/评测方法.md](docs/评测方法.md) 和 [docs/Agent评测方法.md](docs/Agent评测方法.md)。
 
@@ -32,7 +32,7 @@ docker/               compose 编排 + nginx
   所以备份只备 PG。
 - 检索用子块（短，容易命中），命中后返回父块（长，上下文全）给大模型。
 - 检索到的材料强制带出处和年份，答案里的数字要和原文一致，检不到就说没有。
-- agent 不绑 HTTP 请求，跑在后台线程池，用户断线了照样跑完落库。
+- agent 不绑 HTTP 请求，跑在后台线程池，用户断开连接后任务继续执行并写入数据库。
 
 ## 数据流
 
@@ -101,7 +101,6 @@ cd frontend && npm install && npm run dev
 Python 3.11 / PostgreSQL 17 / Milvus 2.6 / SQLAlchemy + Alembic /
 sentence-transformers(bge) / jieba / uv / Next.js
 
-## 版权
+## 协议
 
-本项目归江苏省农业科学院农业设施与装备研究所所有，保留所有权利，
-仅作展示交流，未经书面许可不得复制、分发或商用。详见 [COPYRIGHT](COPYRIGHT)。
+MIT，见 [LICENSE](LICENSE)。
