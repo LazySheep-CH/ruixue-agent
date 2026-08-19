@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/LazySheep-CH/ruixue-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/LazySheep-CH/ruixue-agent/actions/workflows/ci.yml)
 
-我在江苏省农科院实习期间做的项目。地膜领域的中文智能体：用自然语言提问（选膜、性能、
+地膜领域的中文智能体：用自然语言提问（选膜、性能、
 田间问题、标准条文），agent 自己决定查土壤气候、调预测模型还是检索文献，答案带引用出处。
 后端 FastAPI + LangChain，前端 Next.js。
 
