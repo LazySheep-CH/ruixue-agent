@@ -129,6 +129,27 @@ cd frontend && npm install && npm run dev      # 浏览器开 http://127.0.0.1:3
 - [DECISIONS.md](DECISIONS.md) — 关键技术决策与取舍(为什么这么选)
 - [docs/数据来源.md](docs/数据来源.md) — 领域参数的权威出处
 
+## 已知问题
+
+坦白列出来,修一个划一个(详见 issues):
+
+- checkpointer 建表绕过了 Alembic,迁移历史不完整([#17](https://github.com/LazySheep-CH/ruixue-agent/issues/17))
+- config.yaml 缺 key 报裸 KeyError,提示不友好([#18](https://github.com/LazySheep-CH/ruixue-agent/issues/18))
+- BM25 的 DF 阈值一刀切,pbat 这类专业缩写会被误伤([#19](https://github.com/LazySheep-CH/ruixue-agent/issues/19))
+- 评测 rf02 稳定失败:用户问题带错误前提时,agent 不会先纠正([#20](https://github.com/LazySheep-CH/ruixue-agent/issues/20))
+- 嵌入模型每 worker 各载一份,内存是当前扩容瓶颈([#21](https://github.com/LazySheep-CH/ruixue-agent/issues/21))
+
+## 路线图
+
+- [x] 用户自有知识库(上传 PDF/TXT/MD,问答自动引用)
+- [x] 联网搜索与网页阅读(知识库覆盖不到的实时信息)
+- [x] 推理过程实时展示
+- [ ] 嵌入/重排抽成独立服务,worker 回到 CPU 约束
+- [ ] 语义缓存的公平评测(反义句陷阱先解决)
+- [ ] 真实用户 query 日志回流,重建口语化评测集
+- [ ] HTTPS 上线(模板已备,等证书)
+- [ ] 飞书渠道接入
+
 ## 技术栈
 
 Python 3.11 · PostgreSQL 17 · Milvus 2.6 · SQLAlchemy + Alembic ·
