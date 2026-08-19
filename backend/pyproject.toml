@@ -3,7 +3,6 @@ name = "ruixue-agent"
 version = "0.1.0"
 description = "瑞雪智能体 —— 从零正规搭建的 LangGraph agent（配置驱动、多模型）"
 requires-python = ">=3.11"
-# 版本显式锁定,保证 API 行为可复现。
 dependencies = [
     "langchain==1.2.15",
     "langchain-core==1.3.3",
@@ -24,7 +23,7 @@ dependencies = [
     "psycopg[binary]>=3.3.4",
     "sqlalchemy>=2.0",
     "alembic>=1.13",
-    "torch>=2.6",           # 显式声明:否则被 sentence-transformers 顺带装成 CPU 版
+    "torch>=2.6",
     "jieba>=0.42.1",
     "fastapi>=0.139.2",
     "uvicorn[standard]>=0.51.0",
@@ -56,12 +55,10 @@ dev = [
     "xarray>=2026.7.0",
 ]
 
-# ── ruff:代码规范 & 格式化 ────────────────────────────────────────
-# ruff 是个极快的 Python linter(挑错)+ formatter(排版),一个工具顶过去 black+
-# isort+flake8 一整套。CI 会跑 `ruff check`,不过它就拦下 PR。
+# ── ruff ────────────────────────────────────────────────────────
 [tool.ruff]
-line-length = 100          # 一行最多 100 字符(超了换行),团队统一,省得为排版吵架
-target-version = "py311"   # 按 Python 3.11 的语法规则检查
+line-length = 100
+target-version = "py311"
 # Alembic 的迁移文件是【工具自动生成】的,不该用我们的规范去卡它。
 extend-exclude = ["**/migrations/**"]
 
@@ -82,31 +79,18 @@ select = ["E", "W", "F", "I", "UP", "B"]
 # B008"别在默认值里调函数"对它是误报 —— 官方文档就是这么写的。
 "ruixue_app/**" = ["B008"]
 
-# ── 让 torch 用上 GPU ────────────────────────────────────────────────
-# 踩过的坑:PyPI 上 Windows 的默认 torch wheel 是【CPU-only 构建】(版本号带 +cpu)。
-# sentence-transformers 顺带把它拉进来 → 机器上插着 RTX 3090,torch 却连卡都看不见,
-# torch.cuda.is_available() 一直是 False。它不报错,只是默默用 CPU 慢慢磨。
-#
-# CUDA 版的 wheel 只在 PyTorch 自己的源上,得显式指过去。
-#
-# 为什么是 cu126:3090 是 Ampere 架构,cu126 支持得最稳。驱动 595.95 支持到 CUDA 13.2,
-# 而 CUDA 驱动向后兼容 —— 新驱动能跑老 CUDA 编译的程序,所以不用追最新。
+# Windows 下 PyPI 默认的 torch 是 CPU 构建,CUDA 版要从 pytorch 官方源装。
+# cu126 对应本机 3090。
 [[tool.uv.index]]
 name = "pytorch-cu126"
 url = "https://download.pytorch.org/whl/cu126"
-# explicit = true 很关键:只有下面 tool.uv.sources 里点名的包才从这个源拿,
-# 其余依赖照旧走 PyPI。不加的话 uv 会拿它当通用源找所有包,解析会乱。
+# 只有 sources 里点名的包走这个源,其余仍走 PyPI。
 explicit = true
 
 [tool.uv.sources]
 torch = { index = "pytorch-cu126" }
 
-# 让本项目自己成为一个【可安装的包】。
-# 之前没有这段 → ruixue_agent 不在 venv 里 → 每个 script 都得写
-#     sys.path.insert(0, ...)
-# 这种 hack。加上之后 `uv sync` 会把项目以 editable 模式装进 venv:
-# 改代码立刻生效(不用重装),而 import ruixue_agent 在任何地方都能用
-# —— 包括 alembic 这种由第三方工具启动、我们插不进 sys.path 的进程。
+# 项目自身以 editable 模式装进 venv,alembic 等外部工具才能 import 到包。
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
