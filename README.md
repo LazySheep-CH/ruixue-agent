@@ -6,9 +6,9 @@
 田间问题、标准条文），agent 自己决定查土壤气候、调预测模型还是检索文献，答案带引用出处。
 后端 FastAPI + LangChain，前端 Next.js。
 
-几个主要数字：语料 1,578 篇文献和标准，检索 Recall@1 0.769（338 题评测集），
-agent 端到端评测 32/33，自动化测试 505 个。
-完整指标和评测方法见 [docs/评测方法.md](docs/评测方法.md)、[docs/Agent评测方法.md](docs/Agent评测方法.md)。
+语料整理了 1,500 多篇文献和标准，检索 Recall@1 做到 0.769（338 题评测集），
+另外有一套 agent 端到端评测和五百多个自动化测试。
+指标明细和评测方法在 [docs/评测方法.md](docs/评测方法.md) 和 [docs/Agent评测方法.md](docs/Agent评测方法.md)。
 
 ## 架构
 
@@ -17,33 +17,14 @@ agent 端到端评测 32/33，自动化测试 505 个。
 
 ```
 backend/
-├── ruixue_agent/              agent 框架（不依赖 HTTP）
-│   ├── agents/                装配：模型+工具+提示+checkpointer+8 层中间件
-│   ├── tools/                 16 个工具：用量、土壤/气候、天气、性能预测、
-│   │                          配方筛选、知识检索、数据分析、联网搜索
-│   ├── subagents.py           4 位专家子 agent（文献检索/配方优化/故障诊断/数据分析）
-│   ├── memory/                跨会话记忆：运行后抽取事实，PG 存权威，向量召回，按用户隔离
-│   ├── analysis/              上传数据：列名归一、校验、入库、和模型预测对比
-│   ├── userkb/                用户自有知识库：上传 PDF/TXT/MD，问答自动引用
-│   ├── predictors/            三个性能预测模型（降解率/透过率/拉伸强度）+ 环境取数
-│   ├── mcp/                   MCP 客户端，连不上自动降级
-│   ├── skills/                技能（SOP）按需注入
-│   ├── eval/                  评测框架：轨迹抽取、判分、噪声地板、记忆对照
-│   ├── ingestion/             离线入库：MinerU 解析、清洗去重、分块、双写
-│   ├── persistence/           SQLAlchemy 模型 + Alembic 迁移
-│   ├── rag/                   在线检索：向量+BM25、RRF 融合、重排、带引用生成
-│   └── models.py checkpointer.py config.py guardrails/
-├── ruixue_app/                FastAPI 服务层
-│   ├── main.py                /chat(SSE)、/datasets、/kb/docs、/metrics、报告导出、健康探针
-│   ├── runs.py                异步运行：后台线程池 + Redis Stream，断线续跑
-│   ├── auth.py quota.py       JWT / API Key，每日配额
-│   ├── mcp_server.py          MCP 服务端（默认关闭）
-│   └── metrics.py report.py observability.py security/
-├── tests/ scripts/ data/ config/
-frontend/                      Next.js 聊天界面
-docker/                        compose 编排 + nginx
-scripts/ops/                   部署、备份、告警巡检
+├── ruixue_agent/     agent 框架：工具、检索(rag)、记忆、预测、评测
+├── ruixue_app/       FastAPI 服务层：接口、认证、运行记录
+├── tests/ scripts/ config/
+frontend/             Next.js 聊天界面
+docker/               compose 编排 + nginx
 ```
+
+完整目录和一次请求的路径见 [docs/架构说明.md](docs/架构说明.md)。
 
 几个设计上的决定（详细取舍见 [DECISIONS.md](DECISIONS.md)）：
 
@@ -93,8 +74,10 @@ cd frontend && npm install && npm run dev
 
 ## 文档
 
-- [docs/评测方法.md](docs/评测方法.md) 检索评测：评测集怎么造、指标怎么算
-- [docs/Agent评测方法.md](docs/Agent评测方法.md) agent 评测：用例分类、噪声地板、显著性检验
+- [docs/架构说明.md](docs/架构说明.md) 目录结构和请求路径
+
+- [docs/评测方法.md](docs/评测方法.md) 检索评测方法
+- [docs/Agent评测方法.md](docs/Agent评测方法.md) agent 评测方法
 - [docs/运维手册.md](docs/运维手册.md) 部署、备份恢复、容量、排查
 - [docs/操作手册.md](docs/操作手册.md) 从 PDF 到可检索的脚本流程
 - [DECISIONS.md](DECISIONS.md) 技术决策记录
