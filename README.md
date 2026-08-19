@@ -75,7 +75,6 @@ cd frontend && npm install && npm run dev
 ## 文档
 
 - [docs/架构说明.md](docs/架构说明.md) 目录结构和请求路径
-
 - [docs/评测方法.md](docs/评测方法.md) 检索评测方法
 - [docs/Agent评测方法.md](docs/Agent评测方法.md) agent 评测方法
 - [docs/运维手册.md](docs/运维手册.md) 部署、备份恢复、容量、排查
